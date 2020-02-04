@@ -88,23 +88,3 @@ def calc_function_3D(x_values,y_values,parameters,function_type):
     if function_type == function_names[0]: # 'polynomial_3D': order of parameters: [0]*x^2 + [1]*y^2 + [2]*x*y + [3]*x + [4]*y + [5]
         x_meshgrid,y_meshgrid = np.meshgrid(x_values,y_values)
         return parameters[0]*x_meshgrid**2 + parameters[1]*y_meshgrid**2 + parameters[2]*x_meshgrid*y_meshgrid + parameters[3]*x_meshgrid + parameters[4]*y_meshgrid + parameters[5]
-
-
-#####################################
-# dataset regression
-#####################################
-def dataset_regression(fit_data,reference_data,boundaries = None,initial_guess = None,max_iter = 1000,alg = 'evo'):
-    if alg == 'evo':
-        return differential_evolution(fit_error_datasets,bounds=boundaries,args=(fit_data,reference_data),maxiter=max_iter)
-    elif alg == 'lm':
-        return least_squares(fit_error_datasets,initial_guess,args = (fit_data,reference_data,alg),method = 'lm')
-
-def fit_error_datasets(fit_par,fit_data,reference_datasets,alg = 'evo'):
-    fit_par = np.array(fit_par)
-    weighted_datasets = fit_par[:,np.newaxis]*reference_datasets
-    weighted_datasets_sum = weighted_datasets.sum(axis=0)
-    
-    if alg == 'evo':
-        return np.sum((fit_data - weighted_datasets_sum)**2)
-    elif alg == 'lm':
-        return fit_data - weighted_datasets_sum

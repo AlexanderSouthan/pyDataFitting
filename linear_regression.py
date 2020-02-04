@@ -10,6 +10,39 @@ import pandas as pd
 from numbers import Number
 from scipy.stats import linregress
 
+
+def dataset_regression(input_data, reference_data):
+    """
+    based on http://www.spectroscopyonline.com/classical-least-squares-part-i
+    -mathematical-theory?id=&sk=&date=&%0A%09%09%09&pageID=4
+    
+    Does a classical linear least squares regression. Treats the input data as
+    a linear combination of the different components from reference data. Can
+    be used for example to fit spectra of mixtures with spectra of pure 
+    components.
+
+    Parameters
+    ----------
+    input_data : ndarray
+        Numpy array containing the data to be fitted. Shape is (N,).
+    reference_data : ndarray
+        Numpy array containing the pure datasets representing the different
+        components present in input_data. Shape is (M, N) with M reference
+        components.
+    Returns
+    -------
+    coefficients : ndarray
+        Numpy array containing the coefficients of the components. The
+        coefficients are the weghts of the different components given in
+        reference_data. Shape is (M,).
+    """
+    coefficients = np.dot(
+            np.dot(input_data, reference_data.T),
+            np.linalg.inv(np.dot(reference_data, reference_data.T)))
+
+    return coefficients
+
+
 def lin_reg_all_sections(x_values,y_values,mode = 'all_values',r_squared_limit = None):
     """Calculates linear regressions for all sections of the input x and y values. 
     
