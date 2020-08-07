@@ -11,7 +11,7 @@ from numbers import Number
 from scipy.stats import linregress
 
 
-def dataset_regression(input_data, reference_data):
+def dataset_regression(input_data, reference_data, fit_region=None):
     """
     based on http://www.spectroscopyonline.com/classical-least-squares-part-i
     -mathematical-theory?id=&sk=&date=&%0A%09%09%09&pageID=4
@@ -29,6 +29,9 @@ def dataset_regression(input_data, reference_data):
         Numpy array containing the pure datasets representing the different
         components present in input_data. Shape is (M, N) with M reference
         components.
+    fit_region : list of int, optional
+        List containing two integer values giving the index limits concerning
+        N to be used for the fit. The indexes given are included.
     Returns
     -------
     coefficients : ndarray
@@ -36,6 +39,10 @@ def dataset_regression(input_data, reference_data):
         coefficients are the weghts of the different components given in
         reference_data. Shape is (M,).
     """
+    if fit_region is not None:
+        input_data = input_data[fit_region[0]:fit_region[1]+1]
+        reference_data = reference_data[:, fit_region[0]:fit_region[1]+1]
+    
     coefficients = np.dot(
             np.dot(input_data, reference_data.T),
             np.linalg.inv(np.dot(reference_data, reference_data.T)))
