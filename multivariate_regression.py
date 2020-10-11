@@ -4,6 +4,9 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+from matplotlib.cm import rainbow
+from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import savgol_filter
 from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
@@ -16,21 +19,29 @@ from sklearn.metrics import mean_squared_error, r2_score
 class principal_component_regression():
     """Class for performing principal component regression."""
 
-    def __init__(self, x, y, y_names=None):
+    def __init__(self, x, y, x_names=None, y_names=None, scale_std=False):
         """
         Store input data and initialize results DataFrame.
 
         Parameters
         ----------
         x : ndarray
-            Sample training data in the shape (n_samples, n_variables).
+            Sample training data in the shape (n_samples, n_variables). Data is
+            mean centered automatically, so it is not necessary to do that
+            before.
         y : ndarray
             Target values in the shape (n_samples,) for a single target or
             (n_samples, n_targets) for multiple targets.
+        x_names : list of str or None, optional
+            A list containing the names of the n_variables factors. Default is
+            None which results in numbered variables.
         y_names : list of str or None, optional
-            A list containing the names of the responses. Default is None
-            which results in response names of 'response_1', 'response_2' ...
-            'response_n'.
+            A list containing the names of the n_targets responses. Default is
+            None which results in response names of 'response_1', 'response_2'
+            etc.
+        scale_std : bool
+            True means the data will be scaled to unit variance. Default is
+            False.
 
         Returns
         -------
@@ -38,23 +49,40 @@ class principal_component_regression():
 
         """
         self.x_raw = x
-        self.x = scale(self.x_raw, with_std=False)
+        self.n_samples = self.x_raw.shape[0]
+        self.n_variables = self.x_raw.shape[1]
+        self.x = scale(self.x_raw, with_mean=True, with_std=scale_std)
         self.y = y
 
         if len(np.squeeze(self.y).shape) == 1:
-            n_responses = 1
+            self.n_responses = 1
         else:
-            n_responses = self.y.shape[1]
+            self.n_responses = self.y.shape[1]
 
-        if (y_names is not None) and (len(y_names) == n_responses):
+        if (y_names is not None) and (len(y_names) == self.n_responses):
             self.y_names = y_names
         elif y_names is None:
             self.y_names = ['response_{}'.format(ii) for ii in np.arange(
-                1, n_responses+1)]
+                1, self.n_responses+1)]
         else:
             raise ValueError(
-                'Number of response names does not match number of responses.')
-        self.y_annotated = pd.DataFrame(self.y, columns=self.y_names)
+                'Number of response names does not match number of responses. '
+                'Number of responses is {} and response name number is {}.'.format(
+                    self.n_responses, len(x_names)))
+
+        if (x_names is not None) and (len(x_names) == self.n_variables):
+            self.x_names = x_names
+        elif x_names is None:
+            self.x_names = ['factor_{}'.format(ii) for ii in np.arange(
+                1, self.n_variables+1)]
+        else:
+            raise ValueError(
+                'Number of factor names does not match number of factors. '
+                'Number of factors is {} and factor name number is {}.'.format(
+                    self.n_variables, len(x_names)))
+
+        self.y_annotated = pd.DataFrame(
+            self.y, columns=pd.Index(self.y_names, name='Response name'))
 
         # List that will collect PCA component numbers that already
         # were calculated
@@ -62,6 +90,8 @@ class principal_component_regression():
 
         self.pca_objects = pd.Series([], dtype='object')
         self.pca_scores = pd.DataFrame([])
+        self.pca_eigenvalues = pd.Series([], dtype='float64')
+        self.pca_eigenvectors = pd.DataFrame([])
         self.pca_loadings = pd.DataFrame([])
         self.pca_explained_variance = pd.DataFrame([], columns=['each', 'cum'])
         self.pca_results = pd.DataFrame([],
@@ -111,16 +141,26 @@ class principal_component_regression():
             # If that is the case, scores, loadings, etc. are stored in the
             # corresponding attributes.
             if n_components > max(self.computed_components):
-                self.pca_scores = pd.DataFrame(
-                    curr_scores, index=np.arange(1, len(self.x)+1),
-                    columns=np.arange(1, n_components+1))
-                self.pca_loadings = pd.DataFrame(
+                pc_index = pd.Index(np.arange(1, n_components+1),
+                                    name='PC number')
+                variable_index = pd.Index(self.x_names, name='Variable name')
+                sample_index = pd.Index(np.arange(1, self.n_samples+1),
+                                        name='Sample number')
+
+                self.pca_scores = pd.DataFrame(curr_scores, index=sample_index,
+                                               columns=pc_index)
+                self.pca_eigenvalues = pd.Series(
+                    self.pca_objects[n_components].explained_variance_,
+                    index=pc_index)
+                self.pca_eigenvectors = pd.DataFrame(
                     self.pca_objects[n_components].components_.T,
-                    index=np.arange(1, self.x.shape[1]+1),
-                    columns=np.arange(1, n_components+1))
+                    index=variable_index,
+                    columns=pc_index)
+                self.pca_loadings = self.pca_eigenvectors * np.sqrt(
+                    self.pca_eigenvalues)
                 self.pca_explained_variance = pd.DataFrame(
                     self.pca_objects[n_components].explained_variance_ratio_,
-                    columns=['each'], index=np.arange(1, n_components+1))
+                    columns=['each'], index=pc_index)
                 self.pca_explained_variance['cum'] = (
                     self.pca_explained_variance['each'].cumsum())
 
@@ -131,17 +171,16 @@ class principal_component_regression():
             # Some PCA metrics are calculated. The results should be checked,
             # calculation is still experimental. Also the attribute pca_results
             # should be improved in the future.
-            eigenvalues = self.pca_objects[n_components].explained_variance_
-            self.pca_results.at['Hotelling_T2', n_components] = np.array(
-                [sample.dot(self.pca_loadings.loc[:, :n_components]).dot(
-                    np.diag(eigenvalues ** -1)).dot(
-                        self.pca_loadings.loc[:, :n_components].T).dot(
-                            sample.T) for sample in self.x])
-            self.pca_results.at['Q_residuals', n_components] = np.array(
-                [sample.dot(np.identity(self.x.shape[1])-self.pca_loadings.loc[
-                    :, :n_components].dot(self.pca_loadings.loc[
-                        :, :n_components].T)).dot(
-                            sample.T) for sample in self.x])
+            # self.pca_results.at['Hotelling_T2', n_components] = np.array(
+            #     [sample.dot(self.pca_eigenvectors.loc[:, :n_components]).dot(
+            #         np.diag(self.pca_eigenvalues ** -1)).dot(
+            #             self.pca_eigenvectors.loc[:, :n_components].T).dot(
+            #                 sample.T) for sample in self.x])
+            # self.pca_results.at['Q_residuals', n_components] = np.array(
+            #     [sample.dot(np.identity(self.x.shape[1])-self.pca_eigenvectors.loc[
+            #         :, :n_components].dot(self.pca_eigenvectors.loc[
+            #             :, :n_components].T)).dot(
+            #                 sample.T) for sample in self.x])
 
             self.computed_components.append(n_components)
 
@@ -363,6 +402,225 @@ class principal_component_regression():
         prediction = self.pcr_models[n_components].predict(transformed_samples)
         return prediction
 
+    def pca_biplot(self, pc_numbers=[0,1], grouping=[None, None, None], **kwargs):
+        """
+        Make a plot containing both the PCA loadings and scores.
+
+        Parameters
+        ----------
+        pc_numbers : list of int, optional, optional
+            Contains two entries giving the component indices to be used for
+            plotting, starting with 1 for the first principal component. The
+            default is [0,1].
+        grouping : list of str or None, optional
+            Contains three elements that must either be an element from
+            self.y_names or None. Defines a color (first entry), symbol
+            (second entry) and symbol fill style grouping (third entry) of
+            plotted scores based on the given targets. Default is [None, None,
+            None] where there is no grouping and only one color and one symbol
+            is used.
+        **kwargs :
+            colors : list of matplotlib color codes
+                Must contain as many elements as levels present in the target
+                used for the color grouping. By default, the colors are given
+                by the matplotlib rainbow colormap.
+            markers : list og matplotlib markers, optional
+                Must contain as many elements as levels present in the target
+                used for symbol grouping. By default, a modified list obtained
+                by matplotlib.lines.Line2D.markers.keys() is used.
+            fill_styles : list of matplotlib marker fill styles, optional
+                Must contain as many elements as levels present in the target
+                used for fill style grouping. By default, a modified list
+                obtained by matplotlib.lines.Line2D.fillStyles is used.
+
+        Raises
+        ------
+        ValueError
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        # Define plot deltails
+        SMALL_SIZE = 6
+        MEDIUM_SIZE = 8
+        BIGGER_SIZE = 10
+        FIGSIZE = (3.1496, 2.3622)
+        DPI = 600
+        MARKERSIZE = 4
+
+        plt.rc('font', size=MEDIUM_SIZE)  # controls default text sizes
+        plt.rc('axes', titlesize=MEDIUM_SIZE)  # fontsize of the axes title
+        plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+        plt.rc('xtick', labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+        plt.rc('ytick', labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+        plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
+        plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+        
+        # First produce axis with two circles and the coordinate axes as dotted
+        # lines. This axis will be used to plot the PCA loadings.
+        fig1, ax1 = plt.subplots(1, figsize=FIGSIZE, dpi=DPI)
+        circle1 = plt.Circle((0, 0), 1, color='k', linestyle='--', fill=False)
+        circle2 = plt.Circle((0, 0), np.sqrt(0.5), color='k', linestyle='dotted', fill=False)
+        ax1.add_artist(circle1)
+        ax1.add_artist(circle2)
+        ax1.axhline(0, color='k', linestyle='dotted')
+        ax1.axvline(0, color='k', linestyle='dotted')
+        # Draw arrows starting at the origin for the PCA loadings and annotate
+        # them with the name of the corresponding target from self.y_annotated.
+        for (curr_loading1, curr_loading2, curr_var) in zip(
+                self.pca_loadings[pc_numbers[0]],
+                self.pca_loadings[pc_numbers[1]],
+                self.pca_loadings.index.values):
+            ax1.arrow(0, 0, curr_loading1, curr_loading2, color='b', head_width=0.05, length_includes_head=True)
+            if curr_loading1 >= 0:
+                ha = 'left'
+            else:
+                ha = 'right'
+            # rotation = np.arctan(curr_loading2/curr_loading1)/(2*np.pi)*360
+            ax1.text(curr_loading1, curr_loading2, curr_var, ha=ha, va='center', rotation=0)
+        # Set limits and labels
+        ax1.set_xlim(-1.1, 1.1)
+        ax1.set_ylim(-1.1, 1.1)
+        ax1.set_xlabel('PC{} loadings'.format(pc_numbers[0]))
+        ax1.set_ylabel('PC{} loadings'.format(pc_numbers[1]))
+        ax1.set_facecolor('lightgrey')
+
+        # Set x and y tick spacing
+        ax1.xaxis.set_major_locator(ticker.MultipleLocator(0.4))
+        ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+        ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.4))
+        ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+
+        # Add another axis on top of the previous one. The new axis will hold
+        # the PCA scores.
+        ax2 = fig1.add_subplot(111)
+
+        # If no grouping by color and/or symbol grouping contains only None
+        # so a simple scatter plot is made for the scores.
+        if not any(grouping):
+            ax2.plot(self.pca_scores[pc_numbers[0]],
+                     self.pca_scores[pc_numbers[1]],
+                     label='Scores', marker='o',
+                     markersize=MARKERSIZE, linestyle='none')
+            ax2.legend(loc='center right', bbox_to_anchor=(1.7, 0.5))
+
+        # If grouping by color and/or symbol the plotting procedure is a
+        # little more complicated, involves three nested for loops to
+        # accomodate the three grouping principles.
+        elif ((grouping[0] in self.y_names) or (grouping[0] is None)) and (
+                (grouping[1] in self.y_names) or (grouping[1] is None)) and (
+                    (grouping[2] in self.y_names) or (grouping[2] is None)):
+
+            # The values present in the y variables used for grouping are
+            # determined.
+            grouping_levels = []
+            grouping_levels.append(self.y_annotated[grouping[0]].unique() if grouping[0] is not None else None)
+            grouping_levels.append(self.y_annotated[grouping[1]].unique() if grouping[1] is not None else None)
+            grouping_levels.append(self.y_annotated[grouping[2]].unique() if grouping[2] is not None else None)
+
+            # Masks used for the later selection of data to be plotted are
+            # determined. This is done for one y variable used for grouping
+            # after the other (next three if-else statements).
+            grouping_masks =[]
+            if grouping_levels[0] is not None:
+                grouping_masks.append([
+                    (self.y_annotated[grouping[0]]==curr_level).values
+                    for curr_level in grouping_levels[0]])
+            else:
+                grouping_masks.append(
+                    [np.full_like(self.y_annotated.index.values, True,
+                                  dtype='bool')])
+
+            if grouping_levels[1] is not None:
+                grouping_masks.append([
+                    (self.y_annotated[grouping[1]]==curr_level).values
+                    for curr_level in grouping_levels[1]])
+            else:
+                grouping_masks.append([np.full_like(
+                    self.y_annotated.index.values, True, dtype='bool')])
+
+            if grouping_levels[2] is not None:
+                grouping_masks.append([
+                    (self.y_annotated[grouping[2]]==curr_level).values
+                    for curr_level in grouping_levels[2]])
+            else:
+                grouping_masks.append([np.full_like(
+                    self.y_annotated.index.values, True, dtype='bool')])
+
+            # The 1D grouping masks from before are mixed together in one 3D
+            # array that is iterated over while plotting later on.
+            grouping_masks_all = (np.array(grouping_masks[0]) * np.array(grouping_masks[1])[:, np.newaxis]) * np.array(grouping_masks[2])[:, np.newaxis, np.newaxis]
+
+            # Colors, symbols and fill styles used for grouping are determined.
+            grouping_colors = kwargs.get(
+                'colors',
+                [rainbow(x) for x in np.linspace(0, 1,
+                                                 len(grouping_masks_all))])
+            grouping_symbols = kwargs.get(
+                'markers',
+                ['o', 'v', 'P', 'X', 'H', '<', '>', '1', '2', '3', '4',
+                 '8', 's', 'p', '*', 'h', '^', '+', 'x', 'D', 'd', '|',
+                 '_', '.', ',', 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+            grouping_fillstyles = kwargs.get(
+                'fill_styles',
+                ['full', 'none', 'top', 'bottom', 'left', 'right'])
+
+            # Now the actual plotting starts by iterating through the
+            # previously calculated 3D mask array with three nested for loops.
+            idx = np.empty(3, dtype='int')
+            for idx[2], (curr_mask_2, curr_fillstyle) in enumerate(zip(
+                    grouping_masks_all, grouping_fillstyles)):
+                for idx[1], (curr_mask_1, curr_symbol) in enumerate(zip(
+                        curr_mask_2, grouping_symbols)):
+                    for idx[0], (curr_mask_0, curr_color) in enumerate(zip(
+                            curr_mask_1, grouping_colors)):
+
+                        label = ''
+                        for ii, curr_levels in enumerate(grouping_levels):
+                            if curr_levels is not None:
+                                label = label + str(curr_levels[idx[ii]]) + ', '
+                        label = label[:-2]
+                        # if grouping_levels[0] is None:
+                        #     label = str(grouping_levels[1][idx_0])
+                        # elif grouping_levels[1] is None:
+                        #     label = str(grouping_levels[0][idx_1])
+                        # elif grouping_levels[2] is None:
+                        #     label = str(grouping_levels[0][idx_2])
+                        # else:
+                        #     label = str(grouping_levels[0][idx_1])+', '+str(grouping_levels[1][idx_0])
+    
+                        ax2.plot(self.pca_scores.loc[curr_mask_0, pc_numbers[0]],
+                                 self.pca_scores.loc[curr_mask_0, pc_numbers[1]],
+                                 color=curr_color, marker=curr_symbol, label=label,
+                                 fillstyle=curr_fillstyle, linestyle='none',
+                                 markersize=MARKERSIZE)
+
+            legend_title = ''
+            for idx, curr_levels in enumerate(grouping_levels):
+                if curr_levels is not None:
+                    legend_title = legend_title + grouping[idx] + ', '
+            legend_title = legend_title[:-2]
+            ax2.legend(loc='center right', bbox_to_anchor= (1.8, 0.5), title=legend_title)
+        else:
+            raise ValueError('No valid grouping. Allowed values must be in'
+                             ' {} or None, but \'{}\' was given.'.format(
+                                 self.y_names, grouping))
+
+        # Score plot axis labels and positions are fixed and the top layer
+        # background is set to tranparent.
+        ax2.yaxis.set_ticks_position('right')
+        ax2.xaxis.set_ticks_position('top')
+        ax2.yaxis.set_label_position('right')
+        ax2.xaxis.set_label_position('top')
+        ax2.set_xlabel('PC{} scores'.format(pc_numbers[0]))
+        ax2.set_ylabel('PC{} scores'.format(pc_numbers[1]))
+        ax2.patch.set_alpha(0)
+        
+        return fig1
+
     def generate_plots(self, plot_names, response_number=0, **kwargs):
         """
         Generate some basic plots of principal component regression results.
@@ -374,7 +632,8 @@ class principal_component_regression():
             'actual_vs_pred' (actual target values vs. predicted values),
             'r2_vs_comp' (coefficient of determination vs. number of
             components), 'mse_vs_comp' (mean squared error vs. number of
-            components).
+            components), 'biplot' (PCA loadings and scores in one plot),
+            'scoreplot_3D' (a 3D score plot using three principal components).
         response_number : int, optional
             Defines the index of the response from self.y to be plotted.
             Default is 0.
@@ -471,6 +730,88 @@ class principal_component_regression():
                 plt.xlabel('Explained variance')
                 plt.title(self.y_names[response_number])
             plots.append(fig4)
+        if 'scoreplot_3D' in plot_names:
+            pc_numbers = kwargs.get('pc_numbers', [0, 1, 2])
+            grouping = kwargs.get('grouping', [None, None])
+            fig1 = plt.figure()
+            ax2 = Axes3D(fig1)
+            marker_size = 200
+            # If no grouping by color and/or symbol grouping contains only None
+            # so a simple scatter plot is made for the scores.
+            if not any(grouping):
+                ax2.scatter(self.pca_scores[pc_numbers[0]],
+                            self.pca_scores[pc_numbers[1]],
+                            self.pca_scores[pc_numbers[2]],
+                            label='Scores', s=marker_size)
+                ax2.legend(loc='lower left', bbox_to_anchor= (1.1, 0))
+            # If grouping by color and/or symbol the plotting procedure is a
+            # little more complicated, involves two nested for loops to
+            # accomodate the two grouping principles.
+            elif ((grouping[0] in self.y_names) or (grouping[0] is None)) and (
+                    (grouping[1] in self.y_names) or (grouping[1] is None)):
+                grouping_levels_0 = self.y_annotated[grouping[0]].unique() if grouping[0] is not None else None
+                grouping_levels_1 = self.y_annotated[grouping[1]].unique() if grouping[1] is not None else None
+
+                if grouping_levels_0 is not None:
+                    grouping_masks_0 = [
+                        (self.y_annotated[grouping[0]]==curr_level).values
+                        for curr_level in grouping_levels_0]
+                else:
+                    grouping_masks_0 = [np.full_like(self.y_annotated.index.values, True, dtype='bool')]
+
+                if grouping_levels_1 is not None:
+                    grouping_masks_1 = [
+                        (self.y_annotated[grouping[1]]==curr_level).values
+                        for curr_level in grouping_levels_1]
+                else:
+                    grouping_masks_1 = [np.full_like(self.y_annotated.index.values, True, dtype='bool')]
+
+                grouping_masks_all = np.array(grouping_masks_1) * np.array(grouping_masks_0)[:, np.newaxis]
+                grouping_colors = kwargs.get(
+                    'colors',
+                    [rainbow(x) for x in np.linspace(0, 1,
+                                                     len(grouping_masks_all))])
+                #['k', 'b', 'r']
+                grouping_symbols = kwargs.get(
+                    'markers',
+                    ['o', 'v', 'P', 'X', 'H', '<', '>', '1', '2', '3', '4',
+                     '8', 's', 'p', '*', 'h', '^', '+', 'x', 'D', 'd', '|',
+                     '_', '.', ',', 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+                for idx_1, (curr_mask_1, curr_color) in enumerate(zip(
+                        grouping_masks_all, grouping_colors)):
+                    for idx_0, (curr_mask_0, curr_symbol) in enumerate(zip(
+                            curr_mask_1, grouping_symbols)):
+
+                        if grouping_levels_0 is None:
+                            label = str(grouping_levels_1[idx_0])
+                            legend_title = grouping[1]
+                        elif grouping_levels_1 is None:
+                            label = str(grouping_levels_0[idx_1])
+                            legend_title = grouping[0]
+                        else:
+                            label = str(grouping_levels_0[idx_1])+', '+str(grouping_levels_1[idx_0])
+                            legend_title = grouping[0]+', '+grouping[1]
+
+                        ax2.scatter(self.pca_scores.loc[curr_mask_0, pc_numbers[0]],
+                                    self.pca_scores.loc[curr_mask_0, pc_numbers[1]],
+                                    self.pca_scores.loc[curr_mask_0, pc_numbers[2]],
+                                    color=curr_color, marker=curr_symbol,
+                                    s=marker_size, label=label)
+
+                        ax2.legend(loc='upper left', bbox_to_anchor= (1.15, 1), title=legend_title)
+            else:
+                raise ValueError('No valid grouping. Allowed values must be in'
+                                 ' {} or None, but \'{}\' was given.'.format(
+                                     self.y_names, grouping))
+            ax2.yaxis.set_ticks_position('top')
+            ax2.xaxis.set_ticks_position('top')
+            ax2.yaxis.set_label_position('top')
+            ax2.xaxis.set_label_position('top')
+            ax2.set_xlabel('PC{} scores'.format(pc_numbers[0]))
+            ax2.set_ylabel('PC{} scores'.format(pc_numbers[1]))
+            ax2.set_zlabel('PC{} scores'.format(pc_numbers[2]))
+            ax2.patch.set_alpha(0)
+
 
         return plots
 
