@@ -86,12 +86,15 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
 
     """
     # Sort x and y values given in tuples from fixed_points into
-    # individual arrays
+    # individual arrays. The numbers are converted to float64 explicitly to
+    # avoid problems with higher order polynomials where the numbers quickly
+    # are too big e.g. for int32 which is automatically used for integer
+    # constraints.
     if fixed_points is not None:
         x_points = np.array(
-            [curr_point[0] for curr_point in fixed_points])
+            [curr_point[0] for curr_point in fixed_points]).astype('float64')
         y_points = np.array(
-            [curr_point[1] for curr_point in fixed_points])
+            [curr_point[1] for curr_point in fixed_points]).astype('float64')
     else:
         x_points = np.array([])
         y_points = np.array([])
@@ -159,7 +162,7 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
     coefs = np.linalg.solve(
         combined_matrix, combined_vector)[:coef_number]
     y_fit = np.polynomial.polynomial.polyval(x_values, coefs)
-    return (y_fit, coefs)
+    return (y_fit, coefs, x_matrix, ul_matrix, constraints_matrix, combined_matrix, upper_vector, combined_vector)
 
 
 def nonlinear_regression(x_values, y_values, function_type, z_values=None,
