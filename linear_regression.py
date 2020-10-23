@@ -21,6 +21,10 @@ def dataset_regression(input_data, reference_data):
     be used for example to fit spectra of mixtures with spectra of pure
     components.
 
+    Produces the same reult like, but much faster than:
+        coefficients = sklearn.linear_model.LinearRegression().fit(
+            reference_data.T, input_data.T).coef_
+
     Parameters
     ----------
     input_data : ndarray
