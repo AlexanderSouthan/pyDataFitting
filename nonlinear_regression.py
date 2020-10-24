@@ -9,16 +9,101 @@ from scipy import integrate
 # 2D nonlinear regression
 #####################################
 
+def piecewise_polynomial_fit(x_values, y_values, segment_borders,
+                             poly_orders, y_at_borders=None,
+                             slope_at_borders=None):
+
+    # Fixed points are given by the x values in segment_borders and the y
+    # values given in y_at_borders and are collected in tuples of the two
+    # numbers or in empty tuples if no fixed point is used for the given
+    # segment border.
+    if y_at_borders is not None:
+        fixed_points = [()]  # for left edge
+        for x, y in zip(segment_borders, y_at_borders):
+            curr_point = (x, y) if y is not None else ()
+            fixed_points.append(curr_point)
+        fixed_points.append(())  # for right edge
+    else:
+        fixed_points = [()] * (len(segment_borders) + 2)
+
+    # Fixed slopes are given by the x values in segment_borders and the slope
+    # values given in slope_at_borders and are collected in tuples of the two
+    # numbers or in empty tuples if no fixed slope is used for the given
+    # segment border.
+    if slope_at_borders is not None:
+        fixed_slopes = [()]  # for left edge
+        for x, slope in zip(segment_borders, slope_at_borders):
+            curr_slope = (x, slope) if slope is not None else ()
+            fixed_slopes.append(curr_slope)
+        fixed_slopes.append(())  # for right edge
+    else:
+        fixed_slopes = [()] * (len(segment_borders) + 2)
+
+    # Segmentation indices are the indices of the values in x_values clostest
+    # to the values given by segment_borders. At these points, the data is
+    # split into segments that are fitted individually. Additionally, the index
+    # zero is added for the first data point and the data point number for the
+    # last data point.
+    segmentation_indices = np.array([0, len(x_values)])
+    segmentation_indices = np.insert(segmentation_indices, 1, np.argmin(
+        np.abs(x_values[:, np.newaxis]-segment_borders), axis=0))
+    # Later on, the right sides of the segments except the last one have to be
+    # extended by one relative to the segmentation indices in order to have an
+    # overlap of one point between the segments.
+    segment_additions = np.zeros(len(segmentation_indices)-1, dtype='int')
+    segment_additions[:-1] = 1
+
+    fit_segments = []
+    coefs = []
+    # In the loop, the segments are fitted individually, one in each iteration.
+    for curr_start, curr_end, curr_add, curr_order, left_fix, right_fix, left_slope, right_slope in zip(
+            segmentation_indices[:-1], segmentation_indices[1:],
+            segment_additions, poly_orders, fixed_points[:-1],
+            fixed_points[1:], fixed_slopes[:-1], fixed_slopes[1:]):
+        # The fixed points and slopesare tranlated into the syntax understood
+        # by polynomial_fit.
+        curr_fixed = []
+        if left_fix:
+            curr_fixed.append(left_fix)
+        if right_fix:
+            curr_fixed.append(right_fix)
+        if not curr_fixed:
+            curr_fixed = None
+        curr_slope = []
+        if left_slope:
+            curr_slope.append(left_slope)
+        if right_slope:
+            curr_slope.append(right_slope)
+        if not curr_slope:
+            curr_slope = None
+
+        # The polynomial fit itself.
+        curr_segment, curr_coefs = polynomial_fit(
+            x_values[curr_start:curr_end + curr_add],
+            y_values[curr_start:curr_end + curr_add],
+            curr_order, fixed_points=curr_fixed, fixed_slopes=curr_slope)
+
+        # Fit results of the segments are collected in two lists.
+        fit_segments.append(curr_segment[:-1] if curr_add == 1
+                            else curr_segment)
+        coefs.append(curr_coefs)
+
+    # The fit curves of the segments are stitched together.
+    y_fit = np.concatenate(fit_segments)
+
+    return (y_fit, coefs)
+
+
 def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
-            fixed_slopes=None):
+                   fixed_slopes=None):
     """
     Fit a dataset with a polynomial function including constraints.
-    
+
     The fit uses Lagrange multiplicators to introduce equality
     constraints after formulating the polynomial fit as a
     multilinear fit problem. The least squares of the residuals
     is minimized upon the fit. The fit polynomial is described by
-    the following expression: 
+    the following expression:
 
         y_f = a0 + a1*x + a2*x^2 + a3*x^3 + ... + an*x^n
             = [1   x   x^2   x^3  ...  x^n]*[ a0 ]
@@ -48,7 +133,7 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
     by:
         [2*X(T)*X   C(T)] * [  a   ] = [2*X(T)*y]
         [  C          0 ]   [lambda]   [   b    ]
-        
+
     The maximum number of constraints that can be introduced is
     given by poly_order+1.
 
@@ -74,6 +159,7 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
         two numbers, the x value and the slope. If no slope
         constraints are to be applied, this must be None. The
         default is None.
+
     Returns
     -------
     y_fit : ndarray
@@ -112,7 +198,7 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
 
     # The number of constraints and the unknown coefficients in the
     # polynomial fit function
-    constraint_number = len(x_slopes) + len(x_points)
+    # constraint_number = len(x_slopes) + len(x_points)
     coef_number = poly_order + 1
 
     # A matrix with len(x_values) rows and poly_order columns
@@ -134,7 +220,7 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
     # exponents-1.
     constraints_matrix = np.append(
         constraints_matrix,
-        np.arange(coef_number)*x_slopes[:, np.newaxis]**
+        np.arange(coef_number) * x_slopes[:, np.newaxis]**
         np.insert(np.arange(coef_number-1), 0, 0),
         axis=0)
 
@@ -162,7 +248,7 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
     coefs = np.linalg.solve(
         combined_matrix, combined_vector)[:coef_number]
     y_fit = np.polynomial.polynomial.polyval(x_values, coefs)
-    return (y_fit, coefs, x_matrix, ul_matrix, constraints_matrix, combined_matrix, upper_vector, combined_vector)
+    return (y_fit, coefs)
 
 
 def nonlinear_regression(x_values, y_values, function_type, z_values=None,
