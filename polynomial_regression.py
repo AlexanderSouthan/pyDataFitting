@@ -251,28 +251,16 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
     else:
         fixed_slopes = [()] * (len(segment_borders) + 2)
 
-    # Segmentation indices are the indices of the values in x_values clostest
-    # to the values given by segment_borders. At these points, the data is
-    # split into segments that are fitted individually. Additionally, the index
-    # zero is added for the first data point and the data point number for the
-    # last data point.
-    segmentation_indices = np.array([0, len(x_values)])
-    segmentation_indices = np.insert(segmentation_indices, 1, np.argmin(
-        np.abs(x_values[:, np.newaxis]-segment_borders), axis=0))
-    # Later on, the right sides of the segments except the last one have to be
-    # extended by one relative to the segmentation indices in order to have an
-    # overlap of one point between the segments.
-    segment_additions = np.zeros(len(segmentation_indices)-1, dtype='int')
-    segment_additions[:-1] = 1
+    x_segments, y_segments = segment_xy_values(x_values, y_values,
+                                               segment_borders)
 
     fit_segments = []
     coefs = []
     # In the loop, the segments are fitted individually, one in each iteration.
-    for curr_start, curr_end, curr_add, curr_order, left_fix, right_fix, left_slope, right_slope in zip(
-            segmentation_indices[:-1], segmentation_indices[1:],
-            segment_additions, poly_orders, fixed_points[:-1],
+    for curr_x, curr_y, curr_order, left_fix, right_fix, left_slope, right_slope in zip(
+            x_segments, y_segments, poly_orders, fixed_points[:-1],
             fixed_points[1:], fixed_slopes[:-1], fixed_slopes[1:]):
-        # The fixed points and slopesare tranlated into the syntax understood
+        # The fixed points and slopes are translated into the syntax understood
         # by polynomial_fit.
         curr_fixed = []
         if left_fix:
@@ -291,13 +279,13 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
 
         # The polynomial fit itself.
         curr_segment, curr_coefs = polynomial_fit(
-            x_values[curr_start:curr_end + curr_add],
-            y_values[curr_start:curr_end + curr_add],
-            curr_order, fixed_points=curr_fixed, fixed_slopes=curr_slope)
+            curr_x, curr_y, curr_order, fixed_points=curr_fixed,
+            fixed_slopes=curr_slope)
 
         # Fit results of the segments are collected in two lists.
-        fit_segments.append(curr_segment[:-1] if curr_add == 1
-                            else curr_segment)
+        fit_segments.append(
+            curr_segment if len(fit_segments) == len(x_values)-1
+            else curr_segment[:-1])
         coefs.append(curr_coefs)
 
     # The fit curves of the segments are stitched together.
@@ -305,6 +293,31 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
 
     return (y_fit, coefs)
 
+
+def segment_xy_values(x_values, y_values, segment_borders):
+    # Segmentation indices are the indices of the values in x_values clostest
+    # to the values given by segment_borders. At these points, the data is
+    # split into segments that are fitted individually. Additionally, the index
+    # zero is added for the first data point and the data point number for the
+    # last data point.
+    segmentation_indices = np.array([0, len(x_values)])
+    segmentation_indices = np.insert(segmentation_indices, 1, np.argmin(
+        np.abs(x_values[:, np.newaxis]-segment_borders), axis=0))
+    # Later on, the right sides of the segments except the last one have to be
+    # extended by one relative to the segmentation indices in order to have an
+    # overlap of one point between the segments.
+    segment_additions = np.zeros(len(segmentation_indices)-1, dtype='int')
+    segment_additions[:-1] = 1
+    
+    x_segments = []
+    y_segments = []
+    for curr_start, curr_end, curr_add in zip(
+            segmentation_indices[:-1], segmentation_indices[1:],
+            segment_additions):
+        x_segments.append(x_values[curr_start:curr_end + curr_add])
+        y_segments.append(y_values[curr_start:curr_end + curr_add])
+    
+    return (x_segments, y_segments)
 
 def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
                    fixed_slopes=None):
