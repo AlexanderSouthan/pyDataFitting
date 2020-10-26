@@ -122,7 +122,7 @@ def sum_of_squared_residuals(fit_par, x_values, y_values, poly_orders,
         A list containing the polynomial orders used for the fit. Must contain
         one more element than segment_borers contained in fit_par.
     constraint_types : list of str
-        Encdes which value in fit_par is which kind of constraint. 'b' means
+        Encodes which value in fit_par is which kind of constraint. 'b' means
         segmentation border, 'y' means a common y value of adjacent segments,
         and 's' means a common slope of adjacent segments.
 
@@ -143,6 +143,32 @@ def sum_of_squared_residuals(fit_par, x_values, y_values, poly_orders,
 
 
 def decode_fit_par(fit_par, constraint_types):
+    """
+    Translate the 1D array of fit parameters to individual lists.
+
+    The fit paramters are sorted into the lists segment_borders, y_at_borders
+    slope_at_borders based on the strings given in constraint_types. The three
+    lists are used as arguments in piecewise_polynomial_fit called in the
+    functions sum_of_squared_residuals and segment_regression.
+
+    Parameters
+    ----------
+    fit_par : ndarray
+        A 1D array containing the fit parameters. Contains segment_borders,
+        and possibly y_at_borders and slope at borders directly following the
+        corresponding segment border.
+    constraint_types : list of str
+        Encodes which value in fit_par is which kind of constraint. 'b' means
+        segmentation border, 'y' means a common y value of adjacent segments,
+        and 's' means a common slope of adjacent segments.
+
+    Returns
+    -------
+    segment_borders, y_at_borders, slope_at_borders
+        The arguments used for piecewise_polynomial_fit, see its docstring for
+        details.
+
+    """
     # Fit parameters from segment_regression and sum_of_squared_residuals are
     # reordered to be understood by piecewise_polynomial_fit.
     segment_borders = []
@@ -251,8 +277,8 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
     else:
         fixed_slopes = [()] * (len(segment_borders) + 2)
 
-    x_segments, y_segments = segment_xy_values(x_values, y_values,
-                                               segment_borders)
+    x_segments, y_segments = segment_xy_values(x_values, segment_borders,
+                                               y_values=y_values)
 
     fit_segments = []
     coefs = []
@@ -284,7 +310,7 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
 
         # Fit results of the segments are collected in two lists.
         fit_segments.append(
-            curr_segment if len(fit_segments) == len(x_values)-1
+            curr_segment if len(fit_segments) == len(x_segments)-1
             else curr_segment[:-1])
         coefs.append(curr_coefs)
 
@@ -294,7 +320,87 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
     return (y_fit, coefs)
 
 
-def segment_xy_values(x_values, y_values, segment_borders):
+def piecewise_polynomial(x_values, coefs, segment_borders=[]):
+    """
+    Calculate the y values of a piecewise polynomial.
+
+    Can also calculate a simple polynomial.
+
+    Parameters
+    ----------
+    x_values : ndarray
+        A 1D array with the length M holding the independent varibale used for
+        calculation of the piecewise polynomial.
+    coefs : list of ndarray
+        A list containing the coefficient vectors of the polynomial equations
+        for the data segments. Each list entry must be in a format so that it
+        can be passed directly to np.polynomial.polynomial.polyval to calculate
+        the polynomial values. If segment borders is left at the default value,
+        still a list with only one coefficient vector must be given.
+    segment_borders : list of int or float, optional
+        The values with respect to x_values at which the data is divided into
+        segments. An arbitrary number of segment borders may be given, but it
+        is recommended to provide a sorted list in order to avoid confusion.
+        If the list is not sorted, it will be sorted. The default is [] meaning
+        that only a simple polynomial is calculated.
+
+    Returns
+    -------
+    ndarray
+        The y values of the piecewise polynomial, an array with the same length
+        as x_values.
+
+    """
+
+    if segment_borders:
+        # segment_borders are sorted in order to avoid problems during
+        # segmentation.
+        segment_borders = np.sort(segment_borders)
+        x_segments = segment_xy_values(x_values, segment_borders)
+    else:
+        x_segments = [x_values]
+
+    curve_segments = []
+    for curr_x, curr_coefs in zip(x_segments, coefs):
+        poly_vals = np.polynomial.polynomial.polyval(curr_x, curr_coefs)
+        curve_segments.append(poly_vals
+                              if len(curve_segments) == len(x_segments)-1
+                              else poly_vals[:-1])
+
+    return np.concatenate(curve_segments)
+
+
+def segment_xy_values(x_values, segment_borders, y_values=None):
+    """
+    Segment the x_values and y_values according to segment borders.
+
+    This function is used in the functions piecewise_polynomial_fit and
+    piecewise_polynomial.
+
+    Parameters
+    ----------
+    x_values : ndarray
+        A 1D array with the length M holding the independent varibale used for
+        the fit.
+    segment_borders : list of int or float
+        The values with respect to x_values at which the data is divided into
+        segments. An arbitrary number of segment borders may be given, and it
+        is recommended to provide a sorted list in order to avoid confusion.
+    y_values : ndarray or None, optional
+        A 1D array with the length M holding the dependent varibale used for
+        the fit. Default is None which means that no y_values are processed.
+
+    Returns
+    -------
+    x_segments : list of ndarray
+        The segments of x_values used for piecewise polynomial calculations.
+        All segments overlap by one point.
+    y_segments : list of ndarray
+        The segments of y_values used for piecewise polynomial calculations.
+        All segments overlap by one point. Only if y_values are passed to the
+        function.
+
+    """
     # Segmentation indices are the indices of the values in x_values clostest
     # to the values given by segment_borders. At these points, the data is
     # split into segments that are fitted individually. Additionally, the index
@@ -308,16 +414,22 @@ def segment_xy_values(x_values, y_values, segment_borders):
     # overlap of one point between the segments.
     segment_additions = np.zeros(len(segmentation_indices)-1, dtype='int')
     segment_additions[:-1] = 1
-    
+
     x_segments = []
-    y_segments = []
+    if y_values is not None:
+        y_segments = []
     for curr_start, curr_end, curr_add in zip(
             segmentation_indices[:-1], segmentation_indices[1:],
             segment_additions):
         x_segments.append(x_values[curr_start:curr_end + curr_add])
-        y_segments.append(y_values[curr_start:curr_end + curr_add])
-    
-    return (x_segments, y_segments)
+        if y_values is not None:
+            y_segments.append(y_values[curr_start:curr_end + curr_add])
+
+    if y_values is not None:
+        return (x_segments, y_segments)
+    else:
+        return x_segments
+
 
 def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
                    fixed_slopes=None):
