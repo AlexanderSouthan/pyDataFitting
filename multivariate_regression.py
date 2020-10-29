@@ -19,7 +19,8 @@ from sklearn.metrics import mean_squared_error, r2_score
 class principal_component_regression():
     """Class for performing principal component regression."""
 
-    def __init__(self, x, y, x_names=None, y_names=None, scale_std=False):
+    def __init__(self, x, y, x_names=None, y_names=None, sample_names=None,
+                 scale_std=False):
         """
         Store input data and initialize results DataFrame.
 
@@ -39,6 +40,9 @@ class principal_component_regression():
             A list containing the names of the n_targets responses. Default is
             None which results in response names of 'response_1', 'response_2'
             etc.
+        sample_names : list of str or None, optional
+            A list containing the n_samples sample names. Default is None which
+            results in sample names of 'sample_1', 'sample_2' etc.
         scale_std : bool
             True means the data will be scaled to unit variance. Default is
             False.
@@ -48,16 +52,12 @@ class principal_component_regression():
         None.
 
         """
-        self.x_raw = x
-        self.n_samples = self.x_raw.shape[0]
-        self.n_variables = self.x_raw.shape[1]
-        self.x = scale(self.x_raw, with_mean=True, with_std=scale_std)
-        self.y = y
-
-        if len(np.squeeze(self.y).shape) == 1:
+        self.n_samples = x.shape[0]
+        self.n_variables = x.shape[1]
+        if len(np.squeeze(y).shape) == 1:
             self.n_responses = 1
         else:
-            self.n_responses = self.y.shape[1]
+            self.n_responses = y.shape[1]
 
         if (y_names is not None) and (len(y_names) == self.n_responses):
             self.y_names = y_names
@@ -81,8 +81,35 @@ class principal_component_regression():
                 'Number of factors is {} and factor name number is {}.'.format(
                     self.n_variables, len(x_names)))
 
-        self.y_annotated = pd.DataFrame(
-            self.y, columns=pd.Index(self.y_names, name='Response name'))
+        if (sample_names is not None) and (len(sample_names) == self.n_samples):
+            self.sample_names = sample_names
+        elif sample_names is None:
+            self.sample_names = ['sample_{}'.format(ii) for ii in np.arange(
+                1, self.n_samples+1)]
+        else:
+            raise ValueError(
+                'Number of sample names does not match number of samples. '
+                'Number of samples is {} and sample name number is {}.'.format(
+                    self.n_samples, len(sample_names)))
+
+        # Construct indeces for later use in the DataFrames that collect the
+        # different PCA and PCR results
+        sample_index = pd.Index(self.sample_names, name='Sample name')
+        var_index = pd.Index(self.x_names, name='Variable name')
+        response_index = pd.Index(self.y_names, name='Response name')
+        y_c_index = pd.MultiIndex.from_product(
+            [self.y_names, self.y.index],
+            names=['response name', 'sample number'])
+        metrics_index = pd.MultiIndex.from_product(
+            [self.y_names, ['r2_c', 'r2_cv', 'rmse_c', 'rmse_cv']],
+            names=['response name', 'metrics type'])
+
+        self.x_raw = pd.DataFrame(x, index=sample_index, columns=var_index)
+        self.x = pd.DataFrame(
+            scale(self.x_raw.values, with_mean=True, with_std=scale_std),
+            index=sample_index, columns=var_index)
+        self.y = pd.DataFrame(
+            y, index=sample_index, columns=response_index)
 
         # List that will collect PCA component numbers that already
         # were calculated
@@ -101,14 +128,8 @@ class principal_component_regression():
         self.pcr_used_pcs = pd.DataFrame([], dtype='object',
                                          columns=self.y_names)
         self.pcr_corr_coef = pd.DataFrame([], columns=self.y_names)
-        y_c_index = pd.MultiIndex.from_product(
-            [self.y_names, self.y_annotated.index],
-            names=['response name', 'sample number'])
         self.pcr_y_c = pd.DataFrame([], index=y_c_index)
         self.pcr_y_cv = pd.DataFrame([], index=y_c_index)
-        metrics_index = pd.MultiIndex.from_product(
-            [self.y_names, ['r2_c', 'r2_cv', 'rmse_c', 'rmse_cv']],
-            names=['response name', 'metrics type'])
         self.pcr_metrics = pd.DataFrame([], index=metrics_index)
 
     def perform_pca(self, n_components, **kwargs):
@@ -144,8 +165,7 @@ class principal_component_regression():
                 pc_index = pd.Index(np.arange(1, n_components+1),
                                     name='PC number')
                 variable_index = pd.Index(self.x_names, name='Variable name')
-                sample_index = pd.Index(np.arange(1, self.n_samples+1),
-                                        name='Sample number')
+                sample_index = pd.Index(self.sample_names, name='Sample name')
 
                 self.pca_scores = pd.DataFrame(curr_scores, index=sample_index,
                                                columns=pc_index)
@@ -202,7 +222,7 @@ class principal_component_regression():
         cv_percentage : float, optional
             Percentage of data used for cross-validation. The default is 20.
         mode : str, optional
-            Determines if PCS used for regression are selected based on
+            Determines if PCs used for regression are selected based on
             explained variance only ('exp_var'), only based on corellation
             with the data in self.y ('corr_coef'), or are given in a list based
             on the exlained variance order ('list'). Default is 'exp_var'.
@@ -292,7 +312,7 @@ class principal_component_regression():
                     self.pca_scores.values.T):
                 self.pcr_corr_coef.at[curr_index+1, curr_y] = np.abs(
                     np.corrcoef(
-                        curr_scores, self.y_annotated[curr_y])[0, 1])
+                        curr_scores, self.y[curr_y])[0, 1])
 
             # Select score values to be used for the regression based on the
             # mode given.
@@ -311,7 +331,7 @@ class principal_component_regression():
 
             # Build linear model
             self.pcr_models.at[n_components, curr_y].fit(
-                fit_scores, self.y_annotated[curr_y])
+                fit_scores, self.y[curr_y])
             # Predict sample values according to PCR model
             idx = pd.IndexSlice
             self.pcr_y_c.loc[idx[curr_y, :], n_components] = (
@@ -319,22 +339,22 @@ class principal_component_regression():
             # Cross-validate the PCR model
             self.pcr_y_cv.loc[idx[curr_y, :], n_components] = (
                 cross_val_predict(self.pcr_models.at[n_components, curr_y],
-                fit_scores, self.y_annotated[curr_y],
+                fit_scores, self.y[curr_y],
                 cv=round(100/cv_percentage)))
             # Calculate metrics for PCR model
             self.pcr_metrics.at[(curr_y, 'r2_c'), n_components] = r2_score(
-                self.y_annotated[curr_y], self.pcr_y_c.loc[
+                self.y[curr_y], self.pcr_y_c.loc[
                     idx[curr_y, :], n_components], multioutput='raw_values')
             self.pcr_metrics.at[(curr_y, 'r2_cv'), n_components] = r2_score(
-                self.y_annotated[curr_y], self.pcr_y_cv.loc[
+                self.y[curr_y], self.pcr_y_cv.loc[
                     idx[curr_y, :], n_components], multioutput='raw_values')
             self.pcr_metrics.at[(curr_y, 'rmse_c'), n_components] = (
-                mean_squared_error(self.y_annotated[curr_y],
+                mean_squared_error(self.y[curr_y],
                                    self.pcr_y_c.loc[idx[curr_y, :],
                                                     n_components],
                                    multioutput='raw_values', squared=False))
             self.pcr_metrics.at[(curr_y, 'rmse_cv'), n_components] = (
-                mean_squared_error(self.y_annotated[curr_y],
+                mean_squared_error(self.y[curr_y],
                                    self.pcr_y_cv.loc[idx[curr_y, :],
                                                      n_components],
                                    multioutput='raw_values', squared=False))
@@ -402,7 +422,8 @@ class principal_component_regression():
         prediction = self.pcr_models[n_components].predict(transformed_samples)
         return prediction
 
-    def pca_biplot(self, pc_numbers=[0,1], grouping=[None, None, None], **kwargs):
+    def pca_biplot(self, pc_numbers=[1, 2], grouping=[None, None, None],
+                   **kwargs):
         """
         Make a plot containing both the PCA loadings and scores.
 
@@ -469,7 +490,7 @@ class principal_component_regression():
         ax1.axhline(0, color='k', linestyle='dotted')
         ax1.axvline(0, color='k', linestyle='dotted')
         # Draw arrows starting at the origin for the PCA loadings and annotate
-        # them with the name of the corresponding target from self.y_annotated.
+        # them with the name of the corresponding target from self.y.
         for (curr_loading1, curr_loading2, curr_var) in zip(
                 self.pca_loadings[pc_numbers[0]],
                 self.pca_loadings[pc_numbers[1]],
@@ -517,9 +538,9 @@ class principal_component_regression():
             # The values present in the y variables used for grouping are
             # determined.
             grouping_levels = []
-            grouping_levels.append(self.y_annotated[grouping[0]].unique() if grouping[0] is not None else None)
-            grouping_levels.append(self.y_annotated[grouping[1]].unique() if grouping[1] is not None else None)
-            grouping_levels.append(self.y_annotated[grouping[2]].unique() if grouping[2] is not None else None)
+            grouping_levels.append(self.y[grouping[0]].unique() if grouping[0] is not None else None)
+            grouping_levels.append(self.y[grouping[1]].unique() if grouping[1] is not None else None)
+            grouping_levels.append(self.y[grouping[2]].unique() if grouping[2] is not None else None)
 
             # Masks used for the later selection of data to be plotted are
             # determined. This is done for one y variable used for grouping
@@ -527,28 +548,28 @@ class principal_component_regression():
             grouping_masks =[]
             if grouping_levels[0] is not None:
                 grouping_masks.append([
-                    (self.y_annotated[grouping[0]]==curr_level).values
+                    (self.y[grouping[0]]==curr_level).values
                     for curr_level in grouping_levels[0]])
             else:
                 grouping_masks.append(
-                    [np.full_like(self.y_annotated.index.values, True,
+                    [np.full_like(self.y.index.values, True,
                                   dtype='bool')])
 
             if grouping_levels[1] is not None:
                 grouping_masks.append([
-                    (self.y_annotated[grouping[1]]==curr_level).values
+                    (self.y[grouping[1]]==curr_level).values
                     for curr_level in grouping_levels[1]])
             else:
                 grouping_masks.append([np.full_like(
-                    self.y_annotated.index.values, True, dtype='bool')])
+                    self.y.index.values, True, dtype='bool')])
 
             if grouping_levels[2] is not None:
                 grouping_masks.append([
-                    (self.y_annotated[grouping[2]]==curr_level).values
+                    (self.y[grouping[2]]==curr_level).values
                     for curr_level in grouping_levels[2]])
             else:
                 grouping_masks.append([np.full_like(
-                    self.y_annotated.index.values, True, dtype='bool')])
+                    self.y.index.values, True, dtype='bool')])
 
             # The 1D grouping masks from before are mixed together in one 3D
             # array that is iterated over while plotting later on.
@@ -658,7 +679,7 @@ class principal_component_regression():
         idx = pd.IndexSlice
         if 'actual_vs_pred' in plot_names:
             n_components = kwargs.get('n_components')
-            curr_y = self.y_annotated[self.y_names[response_number]]
+            curr_y = self.y[self.y_names[response_number]]
             curr_c = self.pcr_y_c.loc[idx[self.y_names[response_number], :],
                                       n_components]
             curr_cv = self.pcr_y_cv.loc[idx[self.y_names[response_number], :],
@@ -749,22 +770,22 @@ class principal_component_regression():
             # accomodate the two grouping principles.
             elif ((grouping[0] in self.y_names) or (grouping[0] is None)) and (
                     (grouping[1] in self.y_names) or (grouping[1] is None)):
-                grouping_levels_0 = self.y_annotated[grouping[0]].unique() if grouping[0] is not None else None
-                grouping_levels_1 = self.y_annotated[grouping[1]].unique() if grouping[1] is not None else None
+                grouping_levels_0 = self.y[grouping[0]].unique() if grouping[0] is not None else None
+                grouping_levels_1 = self.y[grouping[1]].unique() if grouping[1] is not None else None
 
                 if grouping_levels_0 is not None:
                     grouping_masks_0 = [
-                        (self.y_annotated[grouping[0]]==curr_level).values
+                        (self.y[grouping[0]]==curr_level).values
                         for curr_level in grouping_levels_0]
                 else:
-                    grouping_masks_0 = [np.full_like(self.y_annotated.index.values, True, dtype='bool')]
+                    grouping_masks_0 = [np.full_like(self.y.index.values, True, dtype='bool')]
 
                 if grouping_levels_1 is not None:
                     grouping_masks_1 = [
-                        (self.y_annotated[grouping[1]]==curr_level).values
+                        (self.y[grouping[1]]==curr_level).values
                         for curr_level in grouping_levels_1]
                 else:
-                    grouping_masks_1 = [np.full_like(self.y_annotated.index.values, True, dtype='bool')]
+                    grouping_masks_1 = [np.full_like(self.y.index.values, True, dtype='bool')]
 
                 grouping_masks_all = np.array(grouping_masks_1) * np.array(grouping_masks_0)[:, np.newaxis]
                 grouping_colors = kwargs.get(
