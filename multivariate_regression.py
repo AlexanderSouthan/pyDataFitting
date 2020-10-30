@@ -7,10 +7,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from matplotlib.cm import rainbow
 from mpl_toolkits.mplot3d import Axes3D
-from scipy.signal import savgol_filter
 from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
-from sklearn.preprocessing import StandardScaler, scale
+from sklearn.preprocessing import scale
 from sklearn import linear_model
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import mean_squared_error, r2_score
@@ -19,8 +18,8 @@ from sklearn.metrics import mean_squared_error, r2_score
 class principal_component_regression():
     """Class for performing principal component regression."""
 
-    def __init__(self, x, y, x_names=None, y_names=None, sample_names=None,
-                 scale_std=False):
+    def __init__(self, x, y=None, x_names=None, y_names=None,
+                 sample_names=None, scale_std=False):
         """
         Store input data and initialize results DataFrame.
 
@@ -30,9 +29,12 @@ class principal_component_regression():
             Sample training data in the shape (n_samples, n_variables). Data is
             mean centered automatically, so it is not necessary to do that
             before.
-        y : ndarray
+        y : ndarray or None, optional
             Target values in the shape (n_samples,) for a single target or
-            (n_samples, n_targets) for multiple targets.
+            (n_samples, n_targets) for multiple targets. Must be given if a
+            regression is to be performed, otherwise only a PCA on x makes
+            sense. Default is None in which case the regression results are
+            empty and meaningless.
         x_names : list of str or None, optional
             A list containing the names of the n_variables factors. Default is
             None which results in numbered variables.
@@ -43,7 +45,7 @@ class principal_component_regression():
         sample_names : list of str or None, optional
             A list containing the n_samples sample names. Default is None which
             results in sample names of 'sample_1', 'sample_2' etc.
-        scale_std : bool
+        scale_std : bool, optional
             True means the data will be scaled to unit variance. Default is
             False.
 
@@ -52,9 +54,11 @@ class principal_component_regression():
         None.
 
         """
-        self.n_samples = x.shape[0]
-        self.n_variables = x.shape[1]
-        if len(np.squeeze(y).shape) == 1:
+        self.scale_std = scale_std
+        self.n_samples, self.n_variables = x.shape
+        if y is None:
+            self.n_responses = 0
+        elif (y is not None) and (len(np.squeeze(y).shape) == 1):
             self.n_responses = 1
         else:
             self.n_responses = y.shape[1]
@@ -67,8 +71,8 @@ class principal_component_regression():
         else:
             raise ValueError(
                 'Number of response names does not match number of responses. '
-                'Number of responses is {} and response name number is {}.'.format(
-                    self.n_responses, len(x_names)))
+                'Number of responses is {} and response name number is '
+                '{}.'.format(self.n_responses, len(x_names)))
 
         if (x_names is not None) and (len(x_names) == self.n_variables):
             self.x_names = x_names
@@ -98,18 +102,33 @@ class principal_component_regression():
         var_index = pd.Index(self.x_names, name='Variable name')
         response_index = pd.Index(self.y_names, name='Response name')
         y_c_index = pd.MultiIndex.from_product(
-            [self.y_names, self.y.index],
+            [self.y_names, sample_index],
             names=['response name', 'sample number'])
         metrics_index = pd.MultiIndex.from_product(
             [self.y_names, ['r2_c', 'r2_cv', 'rmse_c', 'rmse_cv']],
             names=['response name', 'metrics type'])
 
-        self.x_raw = pd.DataFrame(x, index=sample_index, columns=var_index)
-        self.x = pd.DataFrame(
-            scale(self.x_raw.values, with_mean=True, with_std=scale_std),
-            index=sample_index, columns=var_index)
-        self.y = pd.DataFrame(
-            y, index=sample_index, columns=response_index)
+        # self.x_raw = pd.DataFrame(x, index=sample_index, columns=var_index)
+        self.mean = pd.Series(x.mean(axis=0), index=var_index)
+        self.std = pd.Series(x.std(axis=0), index=var_index)
+
+        self.x = (pd.DataFrame(x, index=sample_index, columns=var_index) -
+                  self.mean)
+        if self.scale_std:
+            self.x = self.x/self.std
+        # self.x = pd.DataFrame(
+        #     scale(self.x_raw.values, with_mean=True, with_std=scale_std),
+        #     index=sample_index, columns=var_index)
+        if (y is not None) and (len(y) == len(x)):
+            self.y = pd.DataFrame(
+                y, index=sample_index, columns=response_index)
+        elif y is None:
+            self.y = None
+        else:
+            raise ValueError(
+                'Number of responses does not match number of samples. '
+                'Number of responses is {} and sample number is {}.'.format(
+                    self.n_responses, self.n_samples))
 
         # List that will collect PCA component numbers that already
         # were calculated
@@ -203,6 +222,77 @@ class principal_component_regression():
             #                 sample.T) for sample in self.x])
 
             self.computed_components.append(n_components)
+
+    def reconstruct_input(self):
+        """
+        Reconstruct the original input data.
+        
+        The input data are reconstructed from the scaled data using the
+        standard deviation from self.std (if self.scale.std == true) and the
+        mean data from self.mean. The input data is not needed within this
+        class, so the input data is not stored in order to save memory.
+
+        Returns
+        -------
+        reconstructed_input : pandas DataFrame
+            A DataFrame in the same format as self.x containing the input data.
+
+        """
+        reconstructed_input = self.x.copy()
+        if self.scale_std:
+            reconstructed_input *= self.std
+        reconstructed_input += self.mean
+
+        return reconstructed_input
+
+    def reconstruct_data(self, used_pcs):
+        """
+        Reconstruct the data from scores and eigenvectors.
+
+        The result is the original data without the contents of the PCA error
+        matrix, so can also be understood as a PCA based smoothing.
+
+        Parameters
+        ----------
+        used_pcs : int or list of int
+            If an int is given, the according number of principal components
+            is used for data reconstruction based on the order of explained
+            variance. If a list of int is given, the pricipal components given
+            in the list will be used for data reconstruction, based on the
+            explained variance ordering and the first PC haveing number 1.
+
+        Returns
+        -------
+        reconstructed_data : pandas DataFrame
+            The recomstructed data in the same format as self.x.
+
+        """
+        if isinstance(used_pcs, int):
+            max_component = used_pcs
+            pc_list = np.arange(1, used_pcs+1)
+        elif isinstance(used_pcs, list) and all(
+                [isinstance(ii, int) for ii in used_pcs]):
+            max_component = max(used_pcs)
+            pc_list = used_pcs
+        else:
+            raise TypeError('No valid value for used_pcs given. Allowed '
+                            'inputs are an integer or a list of integers.')
+
+        if max_component > max(self.computed_components):
+            self.perform_pca(max_component)
+
+        reconstructed_data = pd.DataFrame(np.dot(
+            self.pca_scores.loc[:, pc_list],
+            self.pca_eigenvectors.loc[:, pc_list].T),
+            index = self.x.index,
+            columns = self.x.columns)
+
+        if self.scale_std:
+            reconstructed_data *= self.std
+
+        reconstructed_data += self.mean.values
+
+        return reconstructed_data
 
     def pcr_fit(self, cv_percentage=20, mode='exp_var',
                 **kwargs):
@@ -1087,69 +1177,3 @@ class pls_regression():
             plots.append(fig3)
 
         return plots
-
-
-if __name__ == "__main__":
-
-    def preprocess_pcr(x):
-        # Preprocessing (1): first derivative
-        d1X = savgol_filter(x, 25, polyorder=5, deriv=1)
-        # Preprocess (2) Standardize features by removing the mean and scaling
-        # to unit variance
-        Xstd = StandardScaler().fit_transform(d1X[:, :])
-        return Xstd
-
-    def preprocess_pls(x):
-        X2 = savgol_filter(x, 17, polyorder=2, deriv=2)
-        return X2
-
-    # import data
-    data = pd.read_csv('../../yy_Test-Skripte_alte Skripte/PCR_data/'+
-                       'peach_spectra+brixvalues.csv')
-    X = data.values[:, 1:]
-    Y = data['Brix']
-    wl = np.arange(1100, 2300, 2) # wavelengths
-
-    #########
-    # PCR
-    #########
-
-    # Preprocess data and build model
-    X_PCR = preprocess_pcr(X)
-    pcr = principal_component_regression(X_PCR, Y)
-    pcr_results = pcr.pcr_sweep(max_components=20)
-
-    # Plot analyzed data
-    with plt.style.context(('ggplot')):
-        plt.plot(wl, X_PCR.T)
-        plt.xlabel('Wavelength (nm)')
-        plt.ylabel('Absorbance')
-    plt.show()
-
-    # plot PC regression results
-    pcr_components = 6
-    pcr.generate_plots(['actual_vs_pred', 'r2_vs_comp', 'mse_vs_comp'],
-                       n_components=pcr_components)
-
-    #########
-    # PLSR
-    #########
-
-    # Preprocess data and build model
-    X_PLSR = preprocess_pls(X)
-    plsr = pls_regression(X_PLSR, Y)
-    plsr_results = plsr.plsr_sweep(max_components=40)
-
-    # Plot analyzed data
-    plt.figure(figsize=(8, 4.5))
-    with plt.style.context(('ggplot')):
-        plt.plot(wl, X_PLSR.T)
-        plt.xlabel('Wavelength (nm)')
-        plt.ylabel('D2 Absorbance')
-        plt.show()
-
-    # plot PLS regression results
-    plsr_components = 7
-    plsr.generate_plots(['actual_vs_pred', 'r2_vs_comp', 'mse_vs_comp'],
-                        n_components=plsr_components)
-    plt.show()
