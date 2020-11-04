@@ -28,7 +28,8 @@ def dataset_regression(input_data, reference_data):
     Parameters
     ----------
     input_data : ndarray
-        Numpy array containing the data to be fitted. Shape is (N,).
+        Numpy array containing the data to be fitted. Shape is (N,) for one
+        sample or (L, N) for L samples with N data points.
     reference_data : ndarray
         Numpy array containing the pure datasets representing the different
         components present in input_data. Shape is (M, N) with M reference
@@ -38,7 +39,7 @@ def dataset_regression(input_data, reference_data):
     coefficients : ndarray
         Numpy array containing the coefficients of the components. The
         coefficients are the weghts of the different components given in
-        reference_data. Shape is (M,).
+        reference_data. Shape is (M,) for one sample and (L, M) for L samples.
     """
     coefficients = np.dot(
             np.dot(input_data, reference_data.T),
