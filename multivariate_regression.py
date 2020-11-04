@@ -25,16 +25,20 @@ class principal_component_regression():
 
         Parameters
         ----------
-        x : ndarray
+        x : ndarray or pandas DataFrame
             Sample training data in the shape (n_samples, n_variables). Data is
             mean centered automatically, so it is not necessary to do that
-            before.
-        y : ndarray or None, optional
+            before. If a pandas DataFrame, the index is used for sample naming
+            and the columns for variable naming, so potentially given values by
+            x_names and sample_names are ignored.
+        y : ndarray, pandas DataFrame or None, optional
             Target values in the shape (n_samples,) for a single target or
             (n_samples, n_targets) for multiple targets. Must be given if a
             regression is to be performed, otherwise only a PCA on x makes
             sense. Default is None in which case the regression results are
-            empty and meaningless.
+            empty and meaningless. If a pandas DataFrame, the columns are used
+            for target naming, so potentially given values by y_names are
+            ignored.
         x_names : list of str or None, optional
             A list containing the names of the n_variables factors. Default is
             None which results in numbered variables.
@@ -63,56 +67,75 @@ class principal_component_regression():
         else:
             self.n_responses = y.shape[1]
 
-        if (y_names is not None) and (len(y_names) == self.n_responses):
-            self.y_names = y_names
-        elif y_names is None:
-            self.y_names = ['response_{}'.format(ii) for ii in np.arange(
-                1, self.n_responses+1)]
-        else:
-            raise ValueError(
-                'Number of response names does not match number of responses. '
-                'Number of responses is {} and response name number is '
-                '{}.'.format(self.n_responses, len(x_names)))
+        if isinstance(y, np.ndarray) or (y is None):
+            if (y_names is not None) and (len(y_names) == self.n_responses):
+                self.y_names = y_names
+            elif y_names is None:
+                self.y_names = ['response_{}'.format(ii) for ii in np.arange(
+                    1, self.n_responses+1)]
+            else:
+                raise ValueError(
+                    'Number of response names does not match number of '
+                    'responses. Number of responses is {} and response name '
+                    'number is {}.'.format(self.n_responses, len(x_names)))
 
-        if (x_names is not None) and (len(x_names) == self.n_variables):
-            self.x_names = x_names
-        elif x_names is None:
-            self.x_names = ['factor_{}'.format(ii) for ii in np.arange(
-                1, self.n_variables+1)]
+            self.response_index = pd.Index(self.y_names, name='Response name')
+        elif isinstance(y, pd.DataFrame):
+            self.response_index = y.columns
         else:
-            raise ValueError(
-                'Number of factor names does not match number of factors. '
-                'Number of factors is {} and factor name number is {}.'.format(
-                    self.n_variables, len(x_names)))
+            raise TypeError('y must either be np.ndarray or '
+                            'pd.DataFrame or None.')
 
-        if (sample_names is not None) and (len(sample_names) == self.n_samples):
-            self.sample_names = sample_names
-        elif sample_names is None:
-            self.sample_names = ['sample_{}'.format(ii) for ii in np.arange(
-                1, self.n_samples+1)]
+        if isinstance(x, np.ndarray):
+            if (x_names is not None) and (len(x_names) == self.n_variables):
+                self.x_names = x_names
+            elif x_names is None:
+                self.x_names = ['factor_{}'.format(ii) for ii in np.arange(
+                    1, self.n_variables+1)]
+            else:
+                raise ValueError(
+                    'Number of factor names does not match number of factors. '
+                    'Number of factors is {} and factor name number is '
+                    '{}.'.format(self.n_variables, len(x_names)))
+
+            if (sample_names is not None) and (
+                    len(sample_names) == self.n_samples):
+                self.sample_names = sample_names
+            elif sample_names is None:
+                self.sample_names = [
+                    'sample_{}'.format(ii) for ii in np.arange(
+                        1, self.n_samples+1)]
+            else:
+                raise ValueError(
+                    'Number of sample names does not match number of samples. '
+                    'Number of samples is {} and sample name number is {}.'.format(
+                        self.n_samples, len(sample_names)))
+
+            # Construct indeces for later use in the DataFrames that collect the
+            # different PCA and PCR results
+            self.sample_index = pd.Index(self.sample_names, name='Sample name')
+            self.var_index = pd.Index(self.x_names, name='Variable name')
+        elif isinstance(x, pd.DataFrame):
+            self.sample_index = x.index
+            self.var_index = x.columns
         else:
-            raise ValueError(
-                'Number of sample names does not match number of samples. '
-                'Number of samples is {} and sample name number is {}.'.format(
-                    self.n_samples, len(sample_names)))
-
-        # Construct indeces for later use in the DataFrames that collect the
-        # different PCA and PCR results
-        sample_index = pd.Index(self.sample_names, name='Sample name')
-        var_index = pd.Index(self.x_names, name='Variable name')
-        response_index = pd.Index(self.y_names, name='Response name')
+            raise TypeError('x must either be np.ndarray or '
+                            'pd.DataFrame.')
+            
+        
         y_c_index = pd.MultiIndex.from_product(
-            [self.y_names, sample_index],
+            [self.response_index, self.sample_index.values],
             names=['response name', 'sample number'])
         metrics_index = pd.MultiIndex.from_product(
-            [self.y_names, ['r2_c', 'r2_cv', 'rmse_c', 'rmse_cv']],
+            [self.response_index, ['r2_c', 'r2_cv', 'rmse_c', 'rmse_cv']],
             names=['response name', 'metrics type'])
 
         # self.x_raw = pd.DataFrame(x, index=sample_index, columns=var_index)
-        self.mean = pd.Series(x.mean(axis=0), index=var_index)
-        self.std = pd.Series(x.std(axis=0), index=var_index)
+        self.mean = pd.Series(x.mean(axis=0), index=self.var_index)
+        self.std = pd.Series(x.std(axis=0), index=self.var_index)
 
-        self.x = (pd.DataFrame(x, index=sample_index, columns=var_index) -
+        self.x = (pd.DataFrame(x, index=self.sample_index,
+                               columns=self.var_index) -
                   self.mean)
         if self.scale_std:
             self.x = self.x/self.std
@@ -183,17 +206,16 @@ class principal_component_regression():
             if n_components > max(self.computed_components):
                 pc_index = pd.Index(np.arange(1, n_components+1),
                                     name='PC number')
-                variable_index = pd.Index(self.x_names, name='Variable name')
-                sample_index = pd.Index(self.sample_names, name='Sample name')
 
-                self.pca_scores = pd.DataFrame(curr_scores, index=sample_index,
+                self.pca_scores = pd.DataFrame(curr_scores,
+                                               index=self.sample_index,
                                                columns=pc_index)
                 self.pca_eigenvalues = pd.Series(
                     self.pca_objects[n_components].explained_variance_,
                     index=pc_index)
                 self.pca_eigenvectors = pd.DataFrame(
                     self.pca_objects[n_components].components_.T,
-                    index=variable_index,
+                    index=self.var_index,
                     columns=pc_index)
                 self.pca_loadings = self.pca_eigenvectors * np.sqrt(
                     self.pca_eigenvalues)
