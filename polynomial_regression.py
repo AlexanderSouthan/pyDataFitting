@@ -243,18 +243,16 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
         np.polynomial.polynomial.polyval to calculate the polynomial values.
 
     """
-    # segment_borders, y_at_borders and slopes_at_borders are
-    # sorted by x values in segment_borders in order to avoid problems during
-    # segmentation
+
     sort_order = np.argsort(segment_borders)
     segment_borders = np.array(segment_borders)[sort_order]
+    y_at_borders = np.array(y_at_borders)[sort_order]
 
     # Fixed points are given by the x values in segment_borders and the y
     # values given in y_at_borders and are collected in tuples of the two
     # numbers or in empty tuples if no fixed point is used for the given
     # segment border.
     if y_at_borders is not None:
-        y_at_borders = np.array(y_at_borders)[sort_order]
         fixed_points = [()]  # for left edge
         for x, y in zip(segment_borders, y_at_borders):
             curr_point = (x, y) if y is not None else ()
@@ -268,7 +266,6 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
     # numbers or in empty tuples if no fixed slope is used for the given
     # segment border.
     if slope_at_borders is not None:
-        slope_at_borders = np.array(slope_at_borders)[sort_order]
         fixed_slopes = [()]  # for left edge
         for x, slope in zip(segment_borders, slope_at_borders):
             curr_slope = (x, slope) if slope is not None else ()
@@ -353,9 +350,6 @@ def piecewise_polynomial(x_values, coefs, segment_borders=[]):
     """
 
     if segment_borders:
-        # segment_borders are sorted in order to avoid problems during
-        # segmentation.
-        segment_borders = np.sort(segment_borders)
         x_segments = segment_xy_values(x_values, segment_borders)
     else:
         x_segments = [x_values]
@@ -401,6 +395,17 @@ def segment_xy_values(x_values, segment_borders, y_values=None):
         function.
 
     """
+    # segment_borders are sorted by x values in segment_borders in order to
+    # avoid problems during segmentation
+    segment_borders = np.sort(segment_borders)
+
+    ascending_x = x_values[1] > x_values[0]
+
+    if not ascending_x:
+        x_values = np.flip(x_values)
+        if y_values is not None:
+            y_values = np.flip(y_values)
+
     # Segmentation indices are the indices of the values in x_values clostest
     # to the values given by segment_borders. At these points, the data is
     # split into segments that are fitted individually. Additionally, the index
@@ -409,6 +414,7 @@ def segment_xy_values(x_values, segment_borders, y_values=None):
     segmentation_indices = np.array([0, len(x_values)])
     segmentation_indices = np.insert(segmentation_indices, 1, np.argmin(
         np.abs(x_values[:, np.newaxis]-segment_borders), axis=0))
+
     # Later on, the right sides of the segments except the last one have to be
     # extended by one relative to the segmentation indices in order to have an
     # overlap of one point between the segments.
@@ -424,6 +430,11 @@ def segment_xy_values(x_values, segment_borders, y_values=None):
         x_segments.append(x_values[curr_start:curr_end + curr_add])
         if y_values is not None:
             y_segments.append(y_values[curr_start:curr_end + curr_add])
+
+    if not ascending_x:
+        x_segments = [x_seg[::-1] for x_seg in x_segments][::-1]
+        if y_values is not None:
+            y_segments = [y_seg[::-1] for y_seg in y_segments][::-1]
 
     if y_values is not None:
         return (x_segments, y_segments)
