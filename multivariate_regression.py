@@ -81,6 +81,7 @@ class principal_component_regression():
 
             self.response_index = pd.Index(self.y_names, name='Response name')
         elif isinstance(y, pd.DataFrame):
+            self.y_names = y.columns.to_numpy()
             self.response_index = y.columns
         else:
             raise TypeError('y must either be np.ndarray or '
@@ -144,7 +145,7 @@ class principal_component_regression():
         #     index=sample_index, columns=var_index)
         if (y is not None) and (len(y) == len(x)):
             self.y = pd.DataFrame(
-                y, index=sample_index, columns=response_index)
+                y, index=self.sample_index, columns=self.response_index)
         elif y is None:
             self.y = None
         else:
@@ -166,10 +167,10 @@ class principal_component_regression():
         self.pca_results = pd.DataFrame([],
                                         index=['Hotelling_T2', 'Q_residuals'])
         self.pcr_models = pd.DataFrame([], dtype='object',
-                                       columns=self.y_names)
+                                       columns=self.response_index)
         self.pcr_used_pcs = pd.DataFrame([], dtype='object',
-                                         columns=self.y_names)
-        self.pcr_corr_coef = pd.DataFrame([], columns=self.y_names)
+                                         columns=self.response_index)
+        self.pcr_corr_coef = pd.DataFrame([], columns=self.response_index)
         self.pcr_y_c = pd.DataFrame([], index=y_c_index)
         self.pcr_y_cv = pd.DataFrame([], index=y_c_index)
         self.pcr_metrics = pd.DataFrame([], index=metrics_index)
@@ -535,7 +536,7 @@ class principal_component_regression():
         return prediction
 
     def pca_biplot(self, pc_numbers=[1, 2], grouping=[None, None, None],
-                   **kwargs):
+                   scores_only=False, **kwargs):
         """
         Make a plot containing both the PCA loadings and scores.
 
@@ -552,6 +553,9 @@ class principal_component_regression():
             plotted scores based on the given targets. Default is [None, None,
             None] where there is no grouping and only one color and one symbol
             is used.
+        scores_only : boolean, optional
+            If True, the loadings will not be plotted, but only the scores.
+            Default is False.
         **kwargs :
             colors : list of matplotlib color codes
                 Must contain as many elements as levels present in the target
@@ -591,41 +595,42 @@ class principal_component_regression():
         plt.rc('ytick', labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
         plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
         plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
-        
+
         # First produce axis with two circles and the coordinate axes as dotted
         # lines. This axis will be used to plot the PCA loadings.
         fig1, ax1 = plt.subplots(1, figsize=FIGSIZE, dpi=DPI)
-        circle1 = plt.Circle((0, 0), 1, color='k', linestyle='--', fill=False)
-        circle2 = plt.Circle((0, 0), np.sqrt(0.5), color='k', linestyle='dotted', fill=False)
-        ax1.add_artist(circle1)
-        ax1.add_artist(circle2)
-        ax1.axhline(0, color='k', linestyle='dotted')
-        ax1.axvline(0, color='k', linestyle='dotted')
-        # Draw arrows starting at the origin for the PCA loadings and annotate
-        # them with the name of the corresponding target from self.y.
-        for (curr_loading1, curr_loading2, curr_var) in zip(
-                self.pca_loadings[pc_numbers[0]],
-                self.pca_loadings[pc_numbers[1]],
-                self.pca_loadings.index.values):
-            ax1.arrow(0, 0, curr_loading1, curr_loading2, color='b', head_width=0.05, length_includes_head=True)
-            if curr_loading1 >= 0:
-                ha = 'left'
-            else:
-                ha = 'right'
-            # rotation = np.arctan(curr_loading2/curr_loading1)/(2*np.pi)*360
-            ax1.text(curr_loading1, curr_loading2, curr_var, ha=ha, va='center', rotation=0)
-        # Set limits and labels
-        ax1.set_xlim(-1.1, 1.1)
-        ax1.set_ylim(-1.1, 1.1)
-        ax1.set_xlabel('PC{} loadings'.format(pc_numbers[0]))
-        ax1.set_ylabel('PC{} loadings'.format(pc_numbers[1]))
-        ax1.set_facecolor('lightgrey')
+        if not scores_only:
+            circle1 = plt.Circle((0, 0), 1, color='k', linestyle='--', fill=False)
+            circle2 = plt.Circle((0, 0), np.sqrt(0.5), color='k', linestyle='dotted', fill=False)
+            ax1.add_artist(circle1)
+            ax1.add_artist(circle2)
+            ax1.axhline(0, color='k', linestyle='dotted')
+            ax1.axvline(0, color='k', linestyle='dotted')
+            # Draw arrows starting at the origin for the PCA loadings and annotate
+            # them with the name of the corresponding target from self.y.
+            for (curr_loading1, curr_loading2, curr_var) in zip(
+                    self.pca_loadings[pc_numbers[0]],
+                    self.pca_loadings[pc_numbers[1]],
+                    self.pca_loadings.index.values):
+                ax1.arrow(0, 0, curr_loading1, curr_loading2, color='b', head_width=0.05, length_includes_head=True)
+                if curr_loading1 >= 0:
+                    ha = 'left'
+                else:
+                    ha = 'right'
+                # rotation = np.arctan(curr_loading2/curr_loading1)/(2*np.pi)*360
+                ax1.text(curr_loading1, curr_loading2, curr_var, ha=ha, va='center', rotation=0)
+            # Set limits and labels
+            ax1.set_xlim(-1.1, 1.1)
+            ax1.set_ylim(-1.1, 1.1)
+            ax1.set_xlabel('PC{} loadings'.format(pc_numbers[0]))
+            ax1.set_ylabel('PC{} loadings'.format(pc_numbers[1]))
+            ax1.set_facecolor('lightgrey')
 
-        # Set x and y tick spacing
-        ax1.xaxis.set_major_locator(ticker.MultipleLocator(0.4))
-        ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
-        ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.4))
-        ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+            # Set x and y tick spacing
+            ax1.xaxis.set_major_locator(ticker.MultipleLocator(0.4))
+            ax1.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+            ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.4))
+            ax1.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
 
         # Add another axis on top of the previous one. The new axis will hold
         # the PCA scores.
