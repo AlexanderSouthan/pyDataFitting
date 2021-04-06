@@ -9,11 +9,12 @@ from matplotlib.cm import rainbow
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
-from sklearn.preprocessing import scale
-from sklearn import linear_model
+from sklearn.preprocessing import StandardScaler  # , scale
+# from sklearn import linear_model
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import mean_squared_error, r2_score
-
+import statsmodels.api as sm
+from sklearn.base import BaseEstimator, RegressorMixin
 
 class principal_component_regression():
     """Class for performing principal component regression."""
@@ -112,7 +113,7 @@ class principal_component_regression():
                     'Number of samples is {} and sample name number is {}.'.format(
                         self.n_samples, len(sample_names)))
 
-            # Construct indeces for later use in the DataFrames that collect the
+            # Construct indices for later use in the DataFrames that collect the
             # different PCA and PCR results
             self.sample_index = pd.Index(self.sample_names, name='Sample name')
             self.var_index = pd.Index(self.x_names, name='Variable name')
@@ -122,8 +123,7 @@ class principal_component_regression():
         else:
             raise TypeError('x must either be np.ndarray or '
                             'pd.DataFrame.')
-            
-        
+
         y_c_index = pd.MultiIndex.from_product(
             [self.response_index, self.sample_index.values],
             names=['response name', 'sample number'])
@@ -131,18 +131,10 @@ class principal_component_regression():
             [self.response_index, ['r2_c', 'r2_cv', 'rmse_c', 'rmse_cv']],
             names=['response name', 'metrics type'])
 
-        # self.x_raw = pd.DataFrame(x, index=sample_index, columns=var_index)
-        self.mean = pd.Series(x.mean(axis=0), index=self.var_index)
-        self.std = pd.Series(x.std(axis=0), index=self.var_index)
+        self.scaler = StandardScaler(with_std=self.scale_std)
+        self.x = pd.DataFrame(self.scaler.fit_transform(x),
+                              index=self.sample_index, columns=self.var_index)
 
-        self.x = (pd.DataFrame(x, index=self.sample_index,
-                               columns=self.var_index) -
-                  self.mean)
-        if self.scale_std:
-            self.x = self.x/self.std
-        # self.x = pd.DataFrame(
-        #     scale(self.x_raw.values, with_mean=True, with_std=scale_std),
-        #     index=sample_index, columns=var_index)
         if (y is not None) and (len(y) == len(x)):
             self.y = pd.DataFrame(
                 y, index=self.sample_index, columns=self.response_index)
@@ -167,6 +159,8 @@ class principal_component_regression():
         self.pca_results = pd.DataFrame([],
                                         index=['Hotelling_T2', 'Q_residuals'])
         self.pcr_models = pd.DataFrame([], dtype='object',
+                                       columns=self.response_index)
+        self.pcr_params = pd.DataFrame([], dtype='object',
                                        columns=self.response_index)
         self.pcr_used_pcs = pd.DataFrame([], dtype='object',
                                          columns=self.response_index)
@@ -249,10 +243,10 @@ class principal_component_regression():
     def reconstruct_input(self):
         """
         Reconstruct the original input data.
-        
+
         The input data are reconstructed from the scaled data using the
-        standard deviation from self.std (if self.scale.std == true) and the
-        mean data from self.mean. The input data is not needed within this
+        standard deviation (if self.scale.std == true) and the
+        mean data from self.scaler. The input data is not needed within this
         class, so the input data is not stored in order to save memory.
 
         Returns
@@ -261,11 +255,7 @@ class principal_component_regression():
             A DataFrame in the same format as self.x containing the input data.
 
         """
-        reconstructed_input = self.x.copy()
-        if self.scale_std:
-            reconstructed_input *= self.std
-        reconstructed_input += self.mean
-
+        reconstructed_input = self.scaler.inverse_transform(self.x.copy())
         return reconstructed_input
 
     def reconstruct_data(self, used_pcs):
@@ -282,7 +272,7 @@ class principal_component_regression():
             is used for data reconstruction based on the order of explained
             variance. If a list of int is given, the pricipal components given
             in the list will be used for data reconstruction, based on the
-            explained variance ordering and the first PC haveing number 1.
+            explained variance ordering and the first PC having number 1.
 
         Returns
         -------
@@ -310,10 +300,7 @@ class principal_component_regression():
             index = self.x.index,
             columns = self.x.columns)
 
-        if self.scale_std:
-            reconstructed_data *= self.std
-
-        reconstructed_data += self.mean.values
+        reconstructed_data = self.scaler.inverse_transform(reconstructed_data)
 
         return reconstructed_data
 
@@ -340,9 +327,8 @@ class principal_component_regression():
             with the data in self.y ('corr_coef'), or are given in a list based
             on the exlained variance order ('list'). Default is 'exp_var'.
         **kwargs :
-            All **kwargs from sklearn.decomposition.PCA and
-            sklearn.linear_model.LinearRegression are allowed, see the
-            documentation of those classes for details.
+            All **kwargs from sklearn.decomposition.PCA are allowed, see the
+            documentation of that class for details.
         **kwargs if mode=='exp_var':
             n_components : int
                 The number of principal components used for the regression.
@@ -371,11 +357,11 @@ class principal_component_regression():
         iterated_power = kwargs.get('iterated_power', 'auto')
         random_state = kwargs.get('random_state', None)
 
-        # LinearRegression options
-        fit_intercept = kwargs.get('fit_intercept', True)
-        normalize = kwargs.get('normalize', False)
-        copy_X = kwargs.get('copy_X', True)
-        n_jobs = kwargs.get('n_jobs', None)
+        # # LinearRegression options
+        # fit_intercept = kwargs.get('fit_intercept', True)
+        # normalize = kwargs.get('normalize', False)
+        # copy_X = kwargs.get('copy_X', True)
+        # n_jobs = kwargs.get('n_jobs', None)
 
         if (mode=='exp_var') or (mode=='corr_coef'):
             n_components = kwargs.get('n_components')
@@ -408,19 +394,8 @@ class principal_component_regression():
         # the loop iterates over the individual responses. This results in
         # one call of the fit and predict methods from the linear model objects
         # per iteration. This is necessary for mode=='coord_coef' because for
-        # each response, different components may be used for regression. In
-        # case of mode=='exp_var', this is not stricly necessary because for
-        # all responses, the same components are used for the regression and
-        # the fit and predict methods can handle a 2D input array. I have not
-        # checked if adapting the code accordingly results in a speedier
-        # calculation.
+        # each response, different components may be used for regression.
         for curr_y in self.y_names:
-            # Create linear model objects for all responses
-            self.pcr_models.at[n_components, curr_y] = (
-                linear_model.LinearRegression(fit_intercept=fit_intercept,
-                                              normalize=normalize,
-                                              copy_X=copy_X, n_jobs=n_jobs))
-
             for curr_index, curr_scores in enumerate(
                     self.pca_scores.values.T):
                 self.pcr_corr_coef.at[curr_index+1, curr_y] = np.abs(
@@ -443,15 +418,20 @@ class principal_component_regression():
                 :, self.pcr_used_pcs.at[n_components, curr_y]].values
 
             # Build linear model
-            self.pcr_models.at[n_components, curr_y].fit(
-                fit_scores, self.y[curr_y])
+            fit_scores = sm.add_constant(fit_scores)
+            self.pcr_models.at[n_components, curr_y] = sm.OLS(
+                self.y[curr_y], fit_scores)
+            self.pcr_params.at[n_components, curr_y] = (
+                self.pcr_models.at[n_components, curr_y].fit())
             # Predict sample values according to PCR model
             idx = pd.IndexSlice
             self.pcr_y_c.loc[idx[curr_y, :], n_components] = (
-                self.pcr_models.at[n_components, curr_y].predict(fit_scores))
+                self.pcr_models.at[n_components, curr_y].predict(
+                    self.pcr_params.at[n_components, curr_y].params,
+                    fit_scores))
             # Cross-validate the PCR model
             self.pcr_y_cv.loc[idx[curr_y, :], n_components] = (
-                cross_val_predict(self.pcr_models.at[n_components, curr_y],
+                cross_val_predict(statsmodel_wrapper(sm.OLS),
                 fit_scores, self.y[curr_y],
                 cv=round(100/cv_percentage)))
             # Calculate metrics for PCR model
@@ -468,9 +448,9 @@ class principal_component_regression():
                                    multioutput='raw_values', squared=False))
             self.pcr_metrics.at[(curr_y, 'rmse_cv'), n_components] = (
                 mean_squared_error(self.y[curr_y],
-                                   self.pcr_y_cv.loc[idx[curr_y, :],
-                                                     n_components],
-                                   multioutput='raw_values', squared=False))
+                                    self.pcr_y_cv.loc[idx[curr_y, :],
+                                                      n_components],
+                                    multioutput='raw_values', squared=False))
 
     def pcr_sweep(self, sweep_components=20, cv_percentage=20, mode='exp_var',
                   **kwargs):
@@ -484,10 +464,10 @@ class principal_component_regression():
         cv_percentage : float, optional
             Percentage of data used for cross-validation. The default is 10.
         mode : str, optional
-            Determines if PCS used for regression are selected based on
+            Determines if PCs used for regression are selected based on
             explained variance only ('exp_var'), only based on corellation
             with the data in self.y ('corr_coef'), or are given in a list based
-            on the exlained variance order ('list'). Default is 'exp_var'.
+            on the explained variance order ('list'). Default is 'exp_var'.
         **kwargs :
             The same **kwargs as in self.pcr_fit, only n_components must be
             left out because that is controlled by the iterator of the loop
@@ -509,7 +489,7 @@ class principal_component_regression():
                          n_components=ii, **kwargs)
         # return self.pcr_results
 
-    def predict(self, samples, n_components):
+    def predict(self, samples, n_components, sample_names=None):
         """
         Predict unknown sample target values.
 
@@ -523,6 +503,9 @@ class principal_component_regression():
             Sample data in the shape (n_samples, n_variables).
         n_components : int
             Number of components used in the PCR model for the prediction.
+        sample_names : list of str, optional
+            The names of the samples passed to the function for prediction.
+            Default is None resulting in numbered sample names.
 
         Returns
         -------
@@ -531,8 +514,19 @@ class principal_component_regression():
             target or (n_samples, n_targets) for multiple targets.
 
         """
-        transformed_samples = self.pca_objects[n_components].transform(samples)
-        prediction = self.pcr_models[n_components].predict(transformed_samples)
+        if sample_names is None:
+            sample_names = ['Sample {}'.format(curr_idx) for curr_idx in range(len(samples))]
+
+        transformed_samples = self.pca_objects.at[n_components].transform(
+            self.scaler.transform(samples))
+
+        transformed_samples = sm.add_constant(transformed_samples)
+        self.test=transformed_samples
+
+        prediction = pd.DataFrame([], columns=self.y_names, index=sample_names)
+        for curr_y in self.y_names:
+            prediction[curr_y] = self.pcr_models.at[n_components, curr_y].predict(
+                self.pcr_params.at[n_components, curr_y].params, transformed_samples)
         return prediction
 
     def pca_biplot(self, pc_numbers=[1, 2], grouping=[None, None, None],
@@ -954,10 +948,28 @@ class principal_component_regression():
         return plots
 
 
+class statsmodel_wrapper(BaseEstimator, RegressorMixin):
+    """ A universal sklearn-style wrapper for statsmodels regressors
+
+    This is from https://stackoverflow.com/questions/41045752/using-statsmodel-estimations-with-scikit-learn-cross-validation-is-it-possible
+    """
+    def __init__(self, model_class, fit_intercept=True):
+        self.model_class = model_class
+        self.fit_intercept = fit_intercept
+    def fit(self, X, y):
+        if self.fit_intercept:
+            X = sm.add_constant(X)
+        self.model_ = self.model_class(y, X)
+        self.results_ = self.model_.fit()
+    def predict(self, X):
+        if self.fit_intercept:
+            X = sm.add_constant(X)
+        return self.results_.predict(X)
+
 class pls_regression():
     """Class for performing principal component regression."""
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, scale_std=False):
         """
         Store input data and initialize results DataFrame.
 
@@ -975,8 +987,11 @@ class pls_regression():
 
         """
         self.x_raw = x
-        self.x = scale(self.x_raw, with_std=False)
         self.y = y
+        self.scale_std = scale_std
+
+        self.scaler = StandardScaler(with_std=self.scale_std)
+        self.x = self.scaler.fit_transform(self.x_raw)
 
         results_index = pd.MultiIndex.from_product(
             [['plsr_objects', 'y', 'r2', 'mse', 'Hotelling_T2'], ['c', 'cv']],
@@ -1020,7 +1035,7 @@ class pls_regression():
         self.plsr_results.at[('plsr_objects', 'c'), n_components].fit_transform(self.x, y=self.y)
         # Predict sample values according to PLSR model
         self.plsr_results.at[('y', 'c'), n_components] = self.predict(
-            self.x, n_components)
+            self.x, n_components, scale=False)
         # Cross-validate the PCR model
         self.plsr_results.at[('y', 'cv'), n_components] = np.squeeze(
             cross_val_predict(
@@ -1064,7 +1079,7 @@ class pls_regression():
             self.plsr_fit(ii, **kwargs)
         return self.plsr_results
 
-    def predict(self, samples, n_components):
+    def predict(self, samples, n_components, scale=True):
         """
         Predict unknown sample target values.
 
@@ -1074,6 +1089,9 @@ class pls_regression():
             Sample data in the shape (n_samples, n_variables).
         n_components : int
             Number of components used in the PLSR model for the prediction.
+        scale : bool, optional
+            Defines if the sample data is scaled like the input data or not.
+            If called from within the class, should be False. Default is True.
 
         Returns
         -------
@@ -1082,6 +1100,9 @@ class pls_regression():
             target or (n_samples, n_targets) for multiple targets.
 
         """
+        if scale:
+            samples = self.scaler.transform(samples)
+
         return np.squeeze(
             self.plsr_results.at[('plsr_objects', 'c'), n_components].predict(samples))
 
