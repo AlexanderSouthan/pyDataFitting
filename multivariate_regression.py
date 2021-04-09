@@ -255,7 +255,9 @@ class principal_component_regression():
             A DataFrame in the same format as self.x containing the input data.
 
         """
-        reconstructed_input = self.scaler.inverse_transform(self.x.copy())
+        reconstructed_input = pd.DataFrame(
+            self.scaler.inverse_transform(self.x.copy()),
+            index=self.x.index, columns=self.x.columns)
         return reconstructed_input
 
     def reconstruct_data(self, used_pcs):
@@ -294,13 +296,13 @@ class principal_component_regression():
         if max_component > max(self.computed_components):
             self.perform_pca(max_component)
 
-        reconstructed_data = pd.DataFrame(np.dot(
+        reconstructed_data = np.dot(
             self.pca_scores.loc[:, pc_list],
-            self.pca_eigenvectors.loc[:, pc_list].T),
-            index = self.x.index,
-            columns = self.x.columns)
+            self.pca_eigenvectors.loc[:, pc_list].T)
 
-        reconstructed_data = self.scaler.inverse_transform(reconstructed_data)
+        reconstructed_data = pd.DataFrame(
+            self.scaler.inverse_transform(reconstructed_data),
+            index = self.x.index, columns = self.x.columns)
 
         return reconstructed_data
 
