@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.optimize import differential_evolution
 
-from little_helpers.little_helpers import segment_xy_values
+from little_helpers.array_tools import segment_xy_values
 
 def segment_regression(x_values, y_values, poly_orders, border_bounds,
                        y_bounds=None, slope_bounds=None, max_iter=1000):
