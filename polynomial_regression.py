@@ -318,52 +318,6 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
     return (y_fit, coefs)
 
 
-def piecewise_polynomial(x_values, coefs, segment_borders=[]):
-    """
-    Calculate the y values of a piecewise polynomial.
-
-    Can also calculate a simple polynomial.
-
-    Parameters
-    ----------
-    x_values : ndarray
-        A 1D array with the length M holding the independent varibale used for
-        calculation of the piecewise polynomial.
-    coefs : list of ndarray
-        A list containing the coefficient vectors of the polynomial equations
-        for the data segments. Each list entry must be in a format so that it
-        can be passed directly to np.polynomial.polynomial.polyval to calculate
-        the polynomial values. If segment borders is left at the default value,
-        still a list with only one coefficient vector must be given.
-    segment_borders : list of int or float, optional
-        The values with respect to x_values at which the data is divided into
-        segments. An arbitrary number of segment borders may be given, but it
-        is recommended to provide a sorted list in order to avoid confusion.
-        If the list is not sorted, it will be sorted. The default is [] meaning
-        that only a simple polynomial is calculated.
-
-    Returns
-    -------
-    ndarray
-        The y values of the piecewise polynomial, an array with the same length
-        as x_values.
-
-    """
-
-    if segment_borders:
-        x_segments = segment_xy_values(x_values, segment_borders)
-    else:
-        x_segments = [x_values]
-
-    curve_segments = []
-    for curr_x, curr_coefs in zip(x_segments, coefs):
-        poly_vals = np.polynomial.polynomial.polyval(curr_x, curr_coefs)
-        curve_segments.append(poly_vals
-                              if len(curve_segments) == len(x_segments)-1
-                              else poly_vals[:-1])
-
-    return np.concatenate(curve_segments)
-
 def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
                    fixed_slopes=None):
     """
