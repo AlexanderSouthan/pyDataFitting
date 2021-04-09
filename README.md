@@ -23,6 +23,8 @@ beginning or not, and when a transition to nonlinear behavior occurs.
 * segment_regression: Does a piecewise polynomial fit with the segment borders, y values at the segment borders, or the slopes at the segment borders as additional fit parameters. The additional fit parameters are estimated with an evolutionary fitting algorithm which calls picewise_polynomial_fit several times in each iteration, so the whole procedure is rather slow (albeit still very usable).
 
 ## General nonlinear regression (in nonlinear_regression.py)
+* nonlinear_regression: Does nonlinear regressions by minimizing the sum of the squared residuals. Basically utilizes differential_evolution from scipy.optimize to estimatze the parameters of complex regression functions. The functions must be included in calc_functions, but can be added easily there. This is not a particularly fast method, so use methods from other packages for simple problems.
+* nonlinear_regression_3D: Does the same like nonlinear_regression, but on 3D datasets. Also here, the regression function must be included in calc_function_3D.
 
 ## Principal component regression and partial least squares regression (in multivariate_regression.py)
 * principal_component_regression: A class for a principal component regression (PCR). Does a principal component analysis of the dataset and a multilinear regression on the resulting scores with one or several responses in order to generate a model to predict the responses from future data. The PCR parts work quite well, the methods included for generating various plots still need improving.
