@@ -3,6 +3,7 @@
 import numpy as np
 from scipy.optimize import differential_evolution
 
+from little_helpers.little_helpers import segment_xy_values
 
 def segment_regression(x_values, y_values, poly_orders, border_bounds,
                        y_bounds=None, slope_bounds=None, max_iter=1000):
@@ -362,85 +363,6 @@ def piecewise_polynomial(x_values, coefs, segment_borders=[]):
                               else poly_vals[:-1])
 
     return np.concatenate(curve_segments)
-
-
-def segment_xy_values(x_values, segment_borders, y_values=None):
-    """
-    Segment the x_values and y_values according to segment borders.
-
-    This function is used in the functions piecewise_polynomial_fit and
-    piecewise_polynomial.
-
-    Parameters
-    ----------
-    x_values : ndarray
-        A 1D array with the length M holding the independent varibale used for
-        the fit.
-    segment_borders : list of int or float
-        The values with respect to x_values at which the data is divided into
-        segments. An arbitrary number of segment borders may be given, and it
-        is recommended to provide a sorted list in order to avoid confusion.
-    y_values : ndarray or None, optional
-        A 1D array with the length M holding the dependent varibale used for
-        the fit. Default is None which means that no y_values are processed.
-
-    Returns
-    -------
-    x_segments : list of ndarray
-        The segments of x_values used for piecewise polynomial calculations.
-        All segments overlap by one point.
-    y_segments : list of ndarray
-        The segments of y_values used for piecewise polynomial calculations.
-        All segments overlap by one point. Only if y_values are passed to the
-        function.
-
-    """
-    # segment_borders are sorted by x values in segment_borders in order to
-    # avoid problems during segmentation
-    segment_borders = np.sort(segment_borders)
-
-    ascending_x = x_values[1] > x_values[0]
-
-    if not ascending_x:
-        x_values = np.flip(x_values)
-        if y_values is not None:
-            y_values = np.flip(y_values)
-
-    # Segmentation indices are the indices of the values in x_values clostest
-    # to the values given by segment_borders. At these points, the data is
-    # split into segments that are fitted individually. Additionally, the index
-    # zero is added for the first data point and the data point number for the
-    # last data point.
-    segmentation_indices = np.array([0, len(x_values)])
-    segmentation_indices = np.insert(segmentation_indices, 1, np.argmin(
-        np.abs(x_values[:, np.newaxis]-segment_borders), axis=0))
-
-    # Later on, the right sides of the segments except the last one have to be
-    # extended by one relative to the segmentation indices in order to have an
-    # overlap of one point between the segments.
-    segment_additions = np.zeros(len(segmentation_indices)-1, dtype='int')
-    segment_additions[:-1] = 1
-
-    x_segments = []
-    if y_values is not None:
-        y_segments = []
-    for curr_start, curr_end, curr_add in zip(
-            segmentation_indices[:-1], segmentation_indices[1:],
-            segment_additions):
-        x_segments.append(x_values[curr_start:curr_end + curr_add])
-        if y_values is not None:
-            y_segments.append(y_values[curr_start:curr_end + curr_add])
-
-    if not ascending_x:
-        x_segments = [x_seg[::-1] for x_seg in x_segments][::-1]
-        if y_values is not None:
-            y_segments = [y_seg[::-1] for y_seg in y_segments][::-1]
-
-    if y_values is not None:
-        return (x_segments, y_segments)
-    else:
-        return x_segments
-
 
 def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
                    fixed_slopes=None):
