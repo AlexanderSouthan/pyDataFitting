@@ -532,6 +532,18 @@ class principal_component_regression():
                 self.pcr_params.at[n_components, curr_y].params, transformed_samples)
         return prediction
 
+    def results_to_csv(self, folder=None):
+        if folder is None:
+            folder = ''
+        self.pca_loadings.to_csv(folder + '/pca_loadings.txt', sep='\t')
+        self.pca_explained_variance.to_csv(folder + '/pca_explained_variance.txt', sep='\t')
+        self.pca_scores.to_csv(folder + '/pca_scores.txt', sep='\t')
+        self.pcr_corr_coef.to_csv(folder + '/pcr_corr_coef.txt', sep='\t')
+        self.pcr_metrics.to_csv(folder + '/pcr_metrics.txt', sep='\t')
+        self.pcr_used_pcs.to_csv(folder + '/pcr_used_pcs.txt', sep='\t')
+        self.pcr_y_c.to_csv(folder + '/pcr_y_c.txt', sep='\t')
+        self.pcr_y_cv.to_csv(folder + '/pcr_y_cv.txt', sep='\t')
+
     def pca_biplot(self, pc_numbers=[1, 2], grouping=[None, None, None],
                    scores_only=False, **kwargs):
         """
