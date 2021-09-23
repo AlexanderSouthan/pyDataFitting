@@ -5,7 +5,7 @@ from scipy.optimize import differential_evolution, least_squares
 from scipy import integrate
 from scipy.stats import gaussian_kde
 
-from little_helpers.math_functions import gaussian, langmuir_isotherm, triangle
+from little_helpers.math_functions import gaussian, langmuir_isotherm, triangle, langmuir_isotherm_hydrogel
 
 
 #####################################
@@ -53,7 +53,8 @@ def fit_error(fit_par, x_values, y_values, function_type, weights,
 
 def calc_function(x_values, parameters, function_type):
     function_names = ['polynomial', 'Gauss', 'rectangle_gauss_convolution',
-                      'Langmuir', 'triangle', 'power_law', 'exp_growth']
+                      'Langmuir', 'triangle', 'power_law', 'exp_growth',
+                      'Langmuir_hydrogel']
     # 'polynomial': order of parameters: [0]+[1]*x+[2]*x^2+[3]*x^3+...
     if function_type == function_names[0]:
         function_values = np.full_like(
@@ -110,6 +111,9 @@ def calc_function(x_values, parameters, function_type):
     elif function_type == function_names[6]:  # 'exp_growth'
         function_values = parameters[0]*(1-np.exp(
             -parameters[1]*(x_values-parameters[2])))
+    # 'Langmuir_hydrogel': order of parameters: q_m, K_s, phi_h2o, rho_hydrogel
+    elif function_type == function_names[7]:
+        function_values = langmuir_isotherm_hydrogel(x_values, *parameters)
 
     else:
         raise ValueError('Unknown function type, allowed '
