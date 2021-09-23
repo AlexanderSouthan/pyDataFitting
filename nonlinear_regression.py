@@ -5,7 +5,9 @@ from scipy.optimize import differential_evolution, least_squares
 from scipy import integrate
 from scipy.stats import gaussian_kde
 
-from little_helpers.math_functions import gaussian, langmuir_isotherm, triangle, langmuir_isotherm_hydrogel
+from little_helpers.math_functions import (
+    gaussian, langmuir_isotherm, triangle, langmuir_isotherm_hydrogel,
+    langmuir_comp)
 
 
 #####################################
@@ -159,7 +161,7 @@ def fit_error_3D(fit_par, x_values, y_values, z_values, function_type,
 
 def calc_function_3D(x_values, y_values, parameters, function_type):
 
-    function_names = ['quadratic_3D']
+    function_names = ['quadratic_3D','langmuir_comp']
     assert function_type in function_names, 'Unknown function type.'
 
     # 'polynomial_3D': order of parameters: [0]*x^2 + [1]*y^2 + [2]*x*y + [3]*x
@@ -170,3 +172,7 @@ def calc_function_3D(x_values, y_values, parameters, function_type):
                 parameters[2]*x_meshgrid*y_meshgrid +
                 parameters[3]*x_meshgrid + parameters[4]*y_meshgrid +
                 parameters[5])
+
+    # 'Langmuir_comp': order of parameters: qm, Ks1, Ks2
+    elif function_type == function_names[1]:
+        return langmuir_comp(x_values, y_values, *parameters)
