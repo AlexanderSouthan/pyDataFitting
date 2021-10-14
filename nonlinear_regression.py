@@ -7,7 +7,7 @@ from scipy.stats import gaussian_kde
 
 from little_helpers.math_functions import (
     gaussian, langmuir_isotherm, triangle, langmuir_isotherm_hydrogel,
-    langmuir_comp)
+    langmuir_comp, Herschel_Bulkley, cum_dist_normal_with_rise)
 
 
 #####################################
@@ -26,6 +26,8 @@ def nonlinear_regression(x_values, y_values, function_type, z_values=None,
         bw_method = kwargs.get('bandwidth', None)
         kde = gaussian_kde(x_values, bw_method=bw_method)
         weights = 1/kde.evaluate(x_values)
+    elif weights == 'inverse_y':
+        weights = 1/y_values
 
     if alg == 'evo':
         return differential_evolution(
@@ -56,7 +58,8 @@ def fit_error(fit_par, x_values, y_values, function_type, weights,
 def calc_function(x_values, parameters, function_type):
     function_names = ['polynomial', 'Gauss', 'rectangle_gauss_convolution',
                       'Langmuir', 'triangle', 'power_law', 'exp_growth',
-                      'Langmuir_hydrogel']
+                      'Langmuir_hydrogel', 'Herschel_Bulkley',
+                      'cum_dist_normal_with_rise']
     # 'polynomial': order of parameters: [0]+[1]*x+[2]*x^2+[3]*x^3+...
     if function_type == function_names[0]:
         function_values = np.full_like(
@@ -116,7 +119,13 @@ def calc_function(x_values, parameters, function_type):
     # 'Langmuir_hydrogel': order of parameters: q_m, K_s, phi_h2o, rho_hydrogel
     elif function_type == function_names[7]:
         function_values = langmuir_isotherm_hydrogel(x_values, *parameters)
-
+    # 'Herschel_Bulkley': Order of parameters: yield_stress, k, n
+    elif function_type == function_names[8]:
+        function_values = Herschel_Bulkley(x_values, *parameters)
+    # cum_dist_normal_with_rise: sigma, x_offset, slope, amp, linear_rise
+    elif function_type == function_names[9]:
+        function_values = cum_dist_normal_with_rise(x_values, *parameters,
+                                                    linear_rise='right')
     else:
         raise ValueError('Unknown function type, allowed '
                          'values are {}'.format(function_names))
