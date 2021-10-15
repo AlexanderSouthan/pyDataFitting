@@ -1,3 +1,5 @@
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 # pyRegression
 Linear and nonlinear fit functions that can be used *e.g.* for curve fitting.
 Is not meant to duplicate methods already implemented *e.g.* in NumPy or SciPy,
