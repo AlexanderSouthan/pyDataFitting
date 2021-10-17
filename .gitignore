@@ -1,2 +1,7 @@
+# -*- coding: utf-8 -*-
 __pycache__
 .pylint.d
+/dist/
+/src/*.egg-info
+pyproject.toml
+examples
