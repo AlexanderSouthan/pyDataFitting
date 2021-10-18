@@ -5,8 +5,9 @@ from gui_objects.plot_canvas import plot_canvas
 from PyQt5.QtWidgets import (QMainWindow, QLabel, QComboBox, QWidget,
                              QGridLayout, QHBoxLayout, QVBoxLayout,
                              QDesktopWidget)
-from pyAnalytics.spectroscopy_data import spectroscopy_data
-from pyAnalytics.raman_data import raman_image
+# from pyAnalytics.spectroscopy_data import spectroscopy_data
+# from pyAnalytics.raman_data import raman_image
+
 
 class pca_viewer(QMainWindow):
     def __init__(self, pca_data):
@@ -20,8 +21,8 @@ class pca_viewer(QMainWindow):
         self.connect_event_handlers()
 
     def init_window(self):
-        self.setGeometry(500, 500, 1200, 900) #xPos, yPos, width, heigth
-        self.center() #center function is defined below
+        self.setGeometry(500, 500, 1200, 900)  # xPos, yPos, width, heigth
+        self.center()  # center function is defined below
         self.setWindowTitle('PCA viewer')
 
         self.container0 = QWidget(self)
@@ -112,10 +113,10 @@ class pca_viewer(QMainWindow):
     def update_data(self, pca_data):
         self.input_datatype = type(pca_data)
         self.input_data = pca_data
-        if type(pca_data) in [spectroscopy_data, raman_image]:
-            self.pcr_object = self.input_data.pca
-        else:  # is assumed to be instance of principal_component_regression
-            self.pcr_object = self.input_data
+        # if type(pca_data) in [spectroscopy_data, raman_image]:
+        #     self.pcr_object = self.input_data.pca
+        # else:  # is assumed to be instance of principal_component_regression
+        self.pcr_object = self.input_data
 
         self.init_combo_boxes()
         self.update_plots()

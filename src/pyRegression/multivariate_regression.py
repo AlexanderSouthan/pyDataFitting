@@ -9,13 +9,13 @@ from matplotlib.cm import rainbow
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import PLSRegression
-from sklearn.preprocessing import StandardScaler  # , scale
-# from sklearn import linear_model
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import mean_squared_error, r2_score
 import statsmodels.api as sm
 
 from little_helpers.statsmodel_wrapper import statsmodel_wrapper
+
 
 class principal_component_regression():
     """Class for performing principal component regression."""
@@ -111,11 +111,11 @@ class principal_component_regression():
             else:
                 raise ValueError(
                     'Number of sample names does not match number of samples. '
-                    'Number of samples is {} and sample name number is {}.'.format(
-                        self.n_samples, len(sample_names)))
+                    'Number of samples is {} and sample name number is {}'
+                    '.'.format(self.n_samples, len(sample_names)))
 
-            # Construct indices for later use in the DataFrames that collect the
-            # different PCA and PCR results
+            # Construct indices for later use in the DataFrames that collect
+            # the different PCA and PCR results
             self.sample_index = pd.Index(self.sample_names, name='Sample name')
             self.var_index = pd.Index(self.x_names, name='Variable name')
         elif isinstance(x, pd.DataFrame):
@@ -187,7 +187,6 @@ class principal_component_regression():
         None.
 
         """
-
         # Check if PCA with n_components was already done before. If so, no
         # calculation is performed because the data is already there.
         if n_components not in self.computed_components:
@@ -303,7 +302,7 @@ class principal_component_regression():
 
         reconstructed_data = pd.DataFrame(
             self.scaler.inverse_transform(reconstructed_data),
-            index = self.x.index, columns = self.x.columns)
+            index=self.x.index, columns=self.x.columns)
 
         return reconstructed_data
 
@@ -366,7 +365,7 @@ class principal_component_regression():
         # copy_X = kwargs.get('copy_X', True)
         # n_jobs = kwargs.get('n_jobs', None)
 
-        if (mode=='exp_var') or (mode=='corr_coef'):
+        if (mode == 'exp_var') or (mode == 'corr_coef'):
             n_components = kwargs.get('n_components')
         elif mode == 'list':
             pc_list = kwargs.get('used_pcs')
@@ -414,7 +413,7 @@ class principal_component_regression():
                 self.pcr_used_pcs.at[n_components, curr_y] = np.flip(
                     np.argsort(self.pcr_corr_coef.loc[:, curr_y].values)[
                         -n_components:])+1
-            elif mode=='list':
+            elif mode == 'list':
                 self.pcr_used_pcs.at[n_components, curr_y] = np.array(pc_list)
 
             fit_scores = self.pca_scores.loc[
@@ -435,8 +434,8 @@ class principal_component_regression():
             # Cross-validate the PCR model
             self.pcr_y_cv.loc[idx[curr_y, :], n_components] = (
                 cross_val_predict(statsmodel_wrapper(sm.OLS),
-                fit_scores, self.y[curr_y],
-                cv=round(100/cv_percentage)))
+                                  fit_scores, self.y[curr_y],
+                                  cv=round(100/cv_percentage)))
             # Calculate metrics for PCR model
             self.pcr_metrics.at[(curr_y, 'r2_c'), n_components] = r2_score(
                 self.y[curr_y], self.pcr_y_c.loc[
@@ -451,9 +450,9 @@ class principal_component_regression():
                                    multioutput='raw_values', squared=False))
             self.pcr_metrics.at[(curr_y, 'rmse_cv'), n_components] = (
                 mean_squared_error(self.y[curr_y],
-                                    self.pcr_y_cv.loc[idx[curr_y, :],
-                                                      n_components],
-                                    multioutput='raw_values', squared=False))
+                                   self.pcr_y_cv.loc[idx[curr_y, :],
+                                                     n_components],
+                                   multioutput='raw_values', squared=False))
 
     def pcr_sweep(self, sweep_components=20, cv_percentage=20, mode='exp_var',
                   **kwargs):
@@ -518,25 +517,29 @@ class principal_component_regression():
 
         """
         if sample_names is None:
-            sample_names = ['Sample {}'.format(curr_idx) for curr_idx in range(len(samples))]
+            sample_names = ['Sample {}'.format(curr_idx)
+                            for curr_idx in range(len(samples))]
 
         transformed_samples = self.pca_objects.at[n_components].transform(
             self.scaler.transform(samples))
 
         transformed_samples = sm.add_constant(transformed_samples)
-        self.test=transformed_samples
+        self.test = transformed_samples
 
         prediction = pd.DataFrame([], columns=self.y_names, index=sample_names)
         for curr_y in self.y_names:
-            prediction[curr_y] = self.pcr_models.at[n_components, curr_y].predict(
-                self.pcr_params.at[n_components, curr_y].params, transformed_samples)
+            prediction[curr_y] = (
+                self.pcr_models.at[n_components, curr_y].predict(
+                    self.pcr_params.at[n_components, curr_y].params,
+                    transformed_samples))
         return prediction
 
     def results_to_csv(self, folder=None):
         if folder is None:
             folder = ''
         self.pca_loadings.to_csv(folder + '/pca_loadings.txt', sep='\t')
-        self.pca_explained_variance.to_csv(folder + '/pca_explained_variance.txt', sep='\t')
+        self.pca_explained_variance.to_csv(
+            folder + '/pca_explained_variance.txt', sep='\t')
         self.pca_scores.to_csv(folder + '/pca_scores.txt', sep='\t')
         self.pcr_corr_coef.to_csv(folder + '/pcr_corr_coef.txt', sep='\t')
         self.pcr_metrics.to_csv(folder + '/pcr_metrics.txt', sep='\t')
@@ -609,25 +612,30 @@ class principal_component_regression():
         # lines. This axis will be used to plot the PCA loadings.
         fig1, ax1 = plt.subplots(1, figsize=FIGSIZE, dpi=DPI)
         if not scores_only:
-            circle1 = plt.Circle((0, 0), 1, color='k', linestyle='--', fill=False)
-            circle2 = plt.Circle((0, 0), np.sqrt(0.5), color='k', linestyle='dotted', fill=False)
+            circle1 = plt.Circle((0, 0), 1, color='k', linestyle='--',
+                                 fill=False)
+            circle2 = plt.Circle((0, 0), np.sqrt(0.5), color='k',
+                                 linestyle='dotted', fill=False)
             ax1.add_artist(circle1)
             ax1.add_artist(circle2)
             ax1.axhline(0, color='k', linestyle='dotted')
             ax1.axvline(0, color='k', linestyle='dotted')
-            # Draw arrows starting at the origin for the PCA loadings and annotate
-            # them with the name of the corresponding target from self.y.
+            # Draw arrows starting at the origin for the PCA loadings and
+            # annotate them with the name of the corresponding target from
+            # self.y.
             for (curr_loading1, curr_loading2, curr_var) in zip(
                     self.pca_loadings[pc_numbers[0]],
                     self.pca_loadings[pc_numbers[1]],
                     self.pca_loadings.index.values):
-                ax1.arrow(0, 0, curr_loading1, curr_loading2, color='b', head_width=0.05, length_includes_head=True)
+                ax1.arrow(0, 0, curr_loading1, curr_loading2, color='b',
+                          head_width=0.05, length_includes_head=True)
                 if curr_loading1 >= 0:
                     ha = 'left'
                 else:
                     ha = 'right'
                 # rotation = np.arctan(curr_loading2/curr_loading1)/(2*np.pi)*360
-                ax1.text(curr_loading1, curr_loading2, curr_var, ha=ha, va='center', rotation=0)
+                ax1.text(curr_loading1, curr_loading2, curr_var, ha=ha,
+                         va='center', rotation=0)
             # Set limits and labels
             ax1.set_xlim(-1.1, 1.1)
             ax1.set_ylim(-1.1, 1.1)
@@ -664,17 +672,23 @@ class principal_component_regression():
             # The values present in the y variables used for grouping are
             # determined.
             grouping_levels = []
-            grouping_levels.append(self.y[grouping[0]].unique() if grouping[0] is not None else None)
-            grouping_levels.append(self.y[grouping[1]].unique() if grouping[1] is not None else None)
-            grouping_levels.append(self.y[grouping[2]].unique() if grouping[2] is not None else None)
+            grouping_levels.append(
+                self.y[grouping[0]].unique() if grouping[0] is not None
+                else None)
+            grouping_levels.append(
+                self.y[grouping[1]].unique() if grouping[1] is not None
+                else None)
+            grouping_levels.append(
+                self.y[grouping[2]].unique() if grouping[2] is not None
+                else None)
 
             # Masks used for the later selection of data to be plotted are
             # determined. This is done for one y variable used for grouping
             # after the other (next three if-else statements).
-            grouping_masks =[]
+            grouping_masks = []
             if grouping_levels[0] is not None:
                 grouping_masks.append([
-                    (self.y[grouping[0]]==curr_level).values
+                    (self.y[grouping[0]] == curr_level).values
                     for curr_level in grouping_levels[0]])
             else:
                 grouping_masks.append(
@@ -683,7 +697,7 @@ class principal_component_regression():
 
             if grouping_levels[1] is not None:
                 grouping_masks.append([
-                    (self.y[grouping[1]]==curr_level).values
+                    (self.y[grouping[1]] == curr_level).values
                     for curr_level in grouping_levels[1]])
             else:
                 grouping_masks.append([np.full_like(
@@ -691,7 +705,7 @@ class principal_component_regression():
 
             if grouping_levels[2] is not None:
                 grouping_masks.append([
-                    (self.y[grouping[2]]==curr_level).values
+                    (self.y[grouping[2]] == curr_level).values
                     for curr_level in grouping_levels[2]])
             else:
                 grouping_masks.append([np.full_like(
@@ -699,7 +713,10 @@ class principal_component_regression():
 
             # The 1D grouping masks from before are mixed together in one 3D
             # array that is iterated over while plotting later on.
-            grouping_masks_all = (np.array(grouping_masks[0]) * np.array(grouping_masks[1])[:, np.newaxis]) * np.array(grouping_masks[2])[:, np.newaxis, np.newaxis]
+            grouping_masks_all = (
+                np.array(grouping_masks[0]) *
+                np.array(grouping_masks[1])[:, np.newaxis]) * np.array(
+                    grouping_masks[2])[:, np.newaxis, np.newaxis]
 
             # Colors, symbols and fill styles used for grouping are determined.
             grouping_colors = kwargs.get(
@@ -765,7 +782,7 @@ class principal_component_regression():
         ax2.set_xlabel('PC{} scores'.format(pc_numbers[0]))
         ax2.set_ylabel('PC{} scores'.format(pc_numbers[1]))
         ax2.patch.set_alpha(0)
-        
+
         return fig1
 
     def generate_plots(self, plot_names, response_number=0, **kwargs):
@@ -958,7 +975,6 @@ class principal_component_regression():
             ax2.set_ylabel('PC{} scores'.format(pc_numbers[1]))
             ax2.set_zlabel('PC{} scores'.format(pc_numbers[2]))
             ax2.patch.set_alpha(0)
-
 
         return plots
 
