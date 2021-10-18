@@ -57,8 +57,7 @@ simple problems.
 datasets. Also here, the regression function must be included in
 calc_function_3D.
 
-## Principal component regression and partial least squares regression (in
-## multivariate_regression.py)
+## Principal component regression and partial least squares regression (in multivariate_regression.py)
 * principal_component_regression: A class for a principal component regression
 (PCR). Does a principal component analysis of the dataset and a multilinear
 regression on the resulting scores with one or several responses in order to
