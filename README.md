@@ -10,6 +10,11 @@ speed. You will need certain functions of my little_helpers repository and
 quite a few other, external packages like Numpy, Pandas, matplotlib,
 scikit-learn, statsmodels, Scipy.
 
+Install with:
+```
+pip install pyDataFitting
+```
+
 ## Linear regression (in linear_regression.py)
 * dataset_regression: Does a classical linear least squares regression. Treats
 the input data as a linear combination of the different components from
