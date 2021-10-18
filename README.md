@@ -1,8 +1,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://app.travis-ci.com/AlexanderSouthan/pyRegression.svg?branch=master)](https://app.travis-ci.com/AlexanderSouthan/pyRegression)
-[![codecov](https://codecov.io/gh/AlexanderSouthan/pyRegression/branch/master/graph/badge.svg?token=NYWF752QP0)](https://codecov.io/gh/AlexanderSouthan/pyRegression)
+[![Build Status](https://app.travis-ci.com/AlexanderSouthan/pyDataFitting.svg?branch=master)](https://app.travis-ci.com/AlexanderSouthan/pyDataFitting)
+[![codecov](https://codecov.io/gh/AlexanderSouthan/pyDataFitting/branch/master/graph/badge.svg?token=NYWF752QP0)](https://codecov.io/gh/AlexanderSouthan/pyDataFitting)
 
-# pyRegression
+# pyDataFitting
 Linear and nonlinear fit functions that can be used *e.g.* for curve fitting.
 Is not meant to duplicate methods already implemented *e.g.* in NumPy or SciPy,
 but to provide additional, specialized regression methods or higher computation

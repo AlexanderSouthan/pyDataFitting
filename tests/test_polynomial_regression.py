@@ -9,7 +9,7 @@ Created on Sat Oct 16 19:59:07 2021
 import numpy as np
 import unittest
 
-from src.pyRegression import polynomial_regression
+from src.pyDataFitting import polynomial_regression
 
 
 class TestPolynomialRegression(unittest.TestCase):
