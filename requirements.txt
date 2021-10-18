@@ -3,5 +3,5 @@ pandas
 scipy
 numbers
 matplotlib
-sklearn
+scikit-learn
 statsmodels
