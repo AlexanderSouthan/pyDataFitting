@@ -1,5 +1,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://app.travis-ci.com/AlexanderSouthan/pyRegression.svg?branch=master)](https://app.travis-ci.com/AlexanderSouthan/pyRegression)
+[![codecov](https://codecov.io/gh/AlexanderSouthan/pyRegression/branch/master/graph/badge.svg?token=NYWF752QP0)](https://codecov.io/gh/AlexanderSouthan/pyRegression)
 
 # pyRegression
 Linear and nonlinear fit functions that can be used *e.g.* for curve fitting.
