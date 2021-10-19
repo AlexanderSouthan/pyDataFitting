@@ -5,6 +5,7 @@ from scipy.optimize import differential_evolution
 
 from little_helpers.array_tools import segment_xy_values
 
+
 def segment_regression(x_values, y_values, poly_orders, border_bounds,
                        y_bounds=None, slope_bounds=None, max_iter=1000):
     """
@@ -247,13 +248,13 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
 
     sort_order = np.argsort(segment_borders)
     segment_borders = np.array(segment_borders)[sort_order]
-    y_at_borders = np.array(y_at_borders)[sort_order]
 
     # Fixed points are given by the x values in segment_borders and the y
     # values given in y_at_borders and are collected in tuples of the two
     # numbers or in empty tuples if no fixed point is used for the given
     # segment border.
     if y_at_borders is not None:
+        y_at_borders = np.array(y_at_borders)[sort_order]
         fixed_points = [()]  # for left edge
         for x, y in zip(segment_borders, y_at_borders):
             curr_point = (x, y) if y is not None else ()
