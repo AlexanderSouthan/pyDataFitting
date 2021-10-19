@@ -361,6 +361,10 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
     The maximum number of constraints that can be introduced is
     given by poly_order+1.
 
+    There is currently a small problem that occurred during testing with a
+    random input for x_values. The result was not numerically stable, slightly
+    different fit curves were obtained with different random points.
+
     Parameters
     ----------
     x_values : ndarray
