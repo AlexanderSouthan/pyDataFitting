@@ -1,0 +1,11 @@
+name: pyDataFitting 
+dependencies:
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
+  - scikit-learn
+  - statsmodels
+  - pip
+  - pip:
+    - little_helpers
