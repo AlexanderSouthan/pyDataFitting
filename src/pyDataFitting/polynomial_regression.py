@@ -363,8 +363,10 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
     given by poly_order+1.
 
     There is currently a small problem that occurred during testing with a
-    random input for x_values. The result was not numerically stable, slightly
-    different fit curves were obtained with different random points.
+    random input for x_values. Slightly different fit curves were obtained
+    with different random points. This might be caused by the different
+    least squares problems, but maybe also due to numerically instable
+    behavior. Should be checked in the future.
 
     Parameters
     ----------
