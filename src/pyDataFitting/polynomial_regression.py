@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import warnings
 import numpy as np
 from scipy.optimize import differential_evolution
 
@@ -320,7 +321,7 @@ def piecewise_polynomial_fit(x_values, y_values, segment_borders,
 
 
 def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
-                   fixed_slopes=None):
+                   fixed_slopes=None, fixed_curvs=None):
     """
     Fit a dataset with a polynomial function including constraints.
 
@@ -390,6 +391,12 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
         two numbers, the x value and the slope. If no slope
         constraints are to be applied, this must be None. The
         default is None.
+    fixed_curvs : list of tuples or None, optional
+        Contains constraints for curvatures that the fit functions must
+        have at specific x values. Each curvature is given by a tuple of
+        two numbers, the x value and the curvature. If no curvature
+        constraints are to be applied, this must be None. The
+        default is None.
 
     Returns
     -------
@@ -402,76 +409,102 @@ def polynomial_fit(x_values, y_values, poly_order, fixed_points=None,
         calculate the polynomial values.
 
     """
-    # Sort x and y values given in tuples from fixed_points into
-    # individual arrays. The numbers are converted to float64 explicitly to
-    # avoid problems with higher order polynomials where the numbers quickly
-    # are too big e.g. for int32 which is automatically used for integer
-    # constraints.
-    if fixed_points is not None:
-        x_points = np.array(
-            [curr_point[0] for curr_point in fixed_points]).astype('float64')
-        y_points = np.array(
-            [curr_point[1] for curr_point in fixed_points]).astype('float64')
-    else:
-        x_points = np.array([])
-        y_points = np.array([])
-
-    # Sort x and slope values given in tuples from fixed_slopes into
-    # individual arrays
-    if fixed_slopes is not None:
-        x_slopes = np.array(
-            [curr_slope[0] for curr_slope in fixed_slopes])
-        slopes = np.array(
-            [curr_slope[1] for curr_slope in fixed_slopes])
-    else:
-        x_slopes = np.array([])
-        slopes = np.array([])
-
-    # The number of constraints and the unknown coefficients in the
-    # polynomial fit function
-    # constraint_number = len(x_slopes) + len(x_points)
+    # Sort x and y values given in tuples from fixed_points, fixed_slopes and
+    # fixed_curvs into individual arrays. The numbers are converted to float64
+    # explicitly to avoid problems with higher order polynomials where the
+    # numbers quickly are too big e.g. for int32 which is automatically used
+    # for integer constraints.
+    const_x = []
+    const_y = []
+    constraint_number = 0
+    # The number of the unknown coefficients in the polynomial fit function
     coef_number = poly_order + 1
+    for ii, curr_const in enumerate([fixed_points, fixed_slopes, fixed_curvs]):
+        if curr_const is not None:
+            const_x.append([curr_point[0] for curr_point in curr_const])
+            const_y.append([curr_point[1] for curr_point in curr_const])
+            constraint_number += len(const_x[-1])
+
+            # Make sure that no x value has two conflicting constraints of the
+            # same kind.
+            if len(const_x[-1]) != len(set(const_x[-1])):
+                raise Exception('More than one constraint of the same kind '
+                                'for one of the x values given.')
+
+            # Make sure that the number of constraints does not exceed the
+            # degrees of freedom of the respective polynomials.
+            if coef_number-ii < len(const_x[-1]):
+                if poly_order-ii < 0:
+                    error_end = 'zero, so no constraint can be applied.'
+                elif poly_order-ii == 0:
+                    error_end = ('a constant, so the maximum number of '
+                                 'constraints is 1.')
+                else:
+                    error_end = ('a polynomial with a degree of {}, so the '
+                                 'maximum number of constraints is {}.'.format(
+                                     poly_order-ii, poly_order-ii+1))
+                raise Exception(
+                    'Too many constraints ({0}) are applied on derivative of '
+                    'order {1}. With a poly_order of {2}, the derivative of '
+                    'order {1} is {3}'.format(
+                        len(const_x[-1]), ii, poly_order, error_end))
+        else:
+            const_x.append([])
+            const_y.append([])
+
+    # Make sure that the total number of constraints does not exceed the
+    # degrees of freedom of polynomial with order of poly_order.
+    if constraint_number > coef_number:
+        raise ValueError('Number of constraints ({}) must be smaller than '
+                         'poly_order + 1 ({}).'.format(
+                             constraint_number, poly_order+1))
+    elif constraint_number == coef_number:
+        warnings.warn('Constraint number equals the number of degrees of '
+                      'freedom for the regression, so the polynomial is fully '
+                      'defined already only by the constraints.')
 
     # A matrix with len(x_values) rows and poly_order columns
     # containing the x_values to the power of all exponents included
     # by poly_order
-    x_matrix = x_values[:, np.newaxis]**np.arange(coef_number)
-
-    # The upper left part of the matrix in the equation system to be
-    # solved later on
-    ul_matrix = 2*np.dot(x_matrix.T, x_matrix)
+    x_matrix = np.polynomial.polynomial.polyvander(x_values, poly_order)
 
     # A matrix containing the factors in front of the polynomial
     # coefficients for the constraints...
-    # ...in case of point constraints the fixed x values to the
-    # power of all exponents included in poly_order
-    constraints_matrix = x_points[:, np.newaxis]**np.arange(coef_number)
+    # ...in case of point constraints the fixed x values to the power of the
+    # exponents.
     # ...in case of slope constraints the x_slopes multiplied with
     # the exponents and with the x_values to power of the
     # exponents-1.
-    constraints_matrix = np.append(
-        constraints_matrix,
-        np.arange(coef_number) * x_slopes[:, np.newaxis] **
-        np.insert(np.arange(coef_number-1), 0, 0),
-        axis=0)
+    # ...in case of curvature constraints the x_curvs multiplied with
+    # the exponents-1 and with the x_values to power of the
+    # exponents-2.
+    constraints_matrix = np.zeros((constraint_number, coef_number))
+    start_idx = 0
+    for ii, curr_const in enumerate(const_x):
+        if curr_const:
+            ff = 1 if ii==0 else np.arange(ii, coef_number)
+            constraints_matrix[start_idx:start_idx+len(curr_const)] = (
+                np.insert(ff * np.polynomial.polynomial.polyvander(
+                    curr_const, poly_order-ii), [0]*ii, 0, axis=1))
+            start_idx += len(curr_const)
 
-    # The combined matrix used for calculation of the least squares
-    # solution
+    # The combined matrix used for calculation of the least squares solution
     combined_matrix = np.zeros(
-        (len(ul_matrix)+len(constraints_matrix),
-         len(ul_matrix)+len(constraints_matrix)))
-    combined_matrix[:coef_number, :coef_number] = ul_matrix
+        (coef_number + constraint_number,)*2)
     combined_matrix[:coef_number:, coef_number:] = constraints_matrix.T
     combined_matrix[coef_number:, :coef_number] = constraints_matrix
+    # The upper left part of the matrix in the equation system to be
+    # solved later on
+    combined_matrix[:coef_number, :coef_number] = 2*np.dot(
+        x_matrix.T, x_matrix)
 
-    # The upper part of the vector used for calculating the least
-    # squares solution.
-    upper_vector = 2 * np.dot(x_matrix.T, y_values)
-
-    # The combined vector used for calulating the least squares
+    # The combined vector used for calulating the least squares solution.
+    combined_vector = np.zeros(coef_number + constraint_number)
+    # The upper part of the vector used for calculating the least squares
     # solution.
-    combined_vector = np.concatenate(
-        [upper_vector, y_points, slopes])
+    combined_vector[:coef_number] = 2 * np.dot(x_matrix.T, y_values)
+    # The combined vector used for calulating the least squares solution.
+    combined_vector[coef_number:] = np.concatenate(const_y)
 
     # Solution of the set of linear equations leading to the
     # polynomial coefficients with minimized least squares of the
