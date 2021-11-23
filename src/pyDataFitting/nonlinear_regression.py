@@ -177,10 +177,8 @@ def calc_function(x_values, parameters, function_type):
                       'cum_dist_normal_with_rise']
     # 'polynomial': order of parameters: [0]+[1]*x+[2]*x^2+[3]*x^3+...
     if function_type == function_names[0]:
-        function_values = np.full_like(
-            x_values, parameters[0], dtype='float64')
-        for ii, curr_parameter in enumerate(parameters[1:]):
-            function_values += curr_parameter * x_values**(ii+1)
+        function_values = np.polynomial.polynomial.polyval(x_values,
+                                                           parameters)
 
     # 'Gauss': order of parameters: amp, xOffset, yOffset, sigma [can be
     # repeated for superposition]
