@@ -35,8 +35,10 @@ def nonlinear_regression(x_values, y_values, function_type, alg='evo',
         for calc_function below.
     alg : string, optional
         The algorithm used to minimize the sum of the squared residuals.
-        Allowed values are 'evo' for differential evolution, 'lm' for
-        Levenberg-Marquardt. The default is 'evo'.
+        Allowed values are in the following list:
+        ['evo', 'lm', 'basinhopping', 'brute', 'shgo', 'dual_annealing']
+        'evo' means differential evolution and 'lm' means Levenberg-Marquardt.
+        The default is 'evo'.
     **kwargs :
         weights : 'string' or None, optional
             Defines the method of weight calculation. Can be 'kde'
