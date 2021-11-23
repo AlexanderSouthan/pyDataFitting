@@ -48,11 +48,11 @@ very usable).
 
 ## General nonlinear regression (in nonlinear_regression.py)
 * nonlinear_regression: Does nonlinear regressions by minimizing the sum of the
-squared residuals. Basically utilizes differential_evolution from
-scipy.optimize to estimatze the parameters of complex regression functions. The
-functions must be included in calc_functions, but can be added easily there. 
-This is not a particularly fast method, so use methods from other packages for
-simple problems.
+squared residuals. Basically utilizes differential_evolution, least_squares,
+basinhopping, brute, shgo or dual_annealing from scipy.optimize to estimatze
+the parameters of complex regression functions. The functions must be included
+in calc_functions, but can be added easily there. This is not a particularly
+fast method, so use methods from other packages for simple problems.
 * nonlinear_regression_3D: Does the same like nonlinear_regression, but on 3D
 datasets. Also here, the regression function must be included in
 calc_function_3D.
