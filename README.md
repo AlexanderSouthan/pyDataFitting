@@ -55,7 +55,8 @@ in calc_functions, but can be added easily there. This is not a particularly
 fast method, so use methods from other packages for simple problems.
 * nonlinear_regression_3D: Does the same like nonlinear_regression, but on 3D
 datasets. Also here, the regression function must be included in
-calc_function_3D.
+calc_function_3D. The functionality is included also in nonlinear_regression by
+now, but this function is kept for backwards compatibility for the moment.
 
 ## Principal component regression and partial least squares regression (in multivariate_regression.py)
 * principal_component_regression: A class for a principal component regression
