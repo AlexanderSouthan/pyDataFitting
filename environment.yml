@@ -6,7 +6,7 @@ dependencies:
   - matplotlib
   - scikit-learn
   - statsmodels
-  - lmfit
   - pip
   - pip:
     - little_helpers
+    - lmfit
