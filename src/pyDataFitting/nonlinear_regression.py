@@ -110,7 +110,7 @@ def nonlinear_regression(x_values, y_values, function_type, alg='evo',
         return least_squares(
             fit_error, initial_guess,
             args=(x_values, y_values, function_type, weights, 'residuals',
-                  z_values), method='lm')
+                  z_values, non_fit_par), method='lm')
 
     elif alg == algs[2]:  # 'basinhopping'
         initial_guess = kwargs.get('initial_guess', None)
@@ -194,7 +194,8 @@ def fit_error(fit_par, x_values, y_values, function_type, weights,
         to_be_fitted = z_values
 
     curr_values = calc_function(x_values, fit_par, function_type,
-                                y_values=second_independent, non_fit_par=non_fit_par)
+                                y_values=second_independent,
+                                non_fit_par=non_fit_par)
 
     modes = ['sum_of_squares', 'residuals']
     if mode == modes[0]:  # sum_of_squares
