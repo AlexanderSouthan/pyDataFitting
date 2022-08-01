@@ -4,4 +4,5 @@ scipy
 matplotlib
 scikit-learn
 statsmodels
+lmfit
 little_helpers

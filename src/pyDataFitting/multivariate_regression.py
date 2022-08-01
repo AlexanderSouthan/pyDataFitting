@@ -79,7 +79,7 @@ class principal_component_regression():
                 raise ValueError(
                     'Number of response names does not match number of '
                     'responses. Number of responses is {} and response name '
-                    'number is {}.'.format(self.n_responses, len(x_names)))
+                    'number is {}.'.format(self.n_responses, len(y_names)))
 
             self.response_index = pd.Index(self.y_names, name='Response name')
         elif isinstance(y, pd.DataFrame):
@@ -523,8 +523,8 @@ class principal_component_regression():
         transformed_samples = self.pca_objects.at[n_components].transform(
             self.scaler.transform(samples))
 
-        transformed_samples = sm.add_constant(transformed_samples)
-        self.test = transformed_samples
+        transformed_samples = sm.add_constant(
+            transformed_samples, has_constant='add')
 
         prediction = pd.DataFrame([], columns=self.y_names, index=sample_names)
         for curr_y in self.y_names:

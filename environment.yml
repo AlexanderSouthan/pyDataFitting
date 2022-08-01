@@ -9,3 +9,4 @@ dependencies:
   - pip
   - pip:
     - little_helpers
+    - lmfit
