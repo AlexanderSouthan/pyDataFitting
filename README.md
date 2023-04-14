@@ -14,6 +14,11 @@ Install with:
 ```
 pip install pyDataFitting
 ```
+or download repository and run the following from repository folder to get the
+latest version that might not have made it to PyPI, yet:
+```
+pip install -e.
+```
 
 ## Linear regression (in linear_regression.py)
 * dataset_regression: Does a classical linear least squares regression. Treats
