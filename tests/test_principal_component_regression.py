@@ -9,7 +9,7 @@ Created on Sat Oct 16 19:59:07 2021
 import numpy as np
 import unittest
 
-from src.pyDataFitting import multivariate_regression
+from src.pyDataFitting import principal_component_regression
 from little_helpers.math_functions import gaussian
 
 
@@ -48,7 +48,7 @@ class TestPrincipalComponentRegression(unittest.TestCase):
             mixtures[idx] = (components.T*curr_coeffs).sum(axis=1)
 
         # A principal component regression is performed
-        pcr = multivariate_regression.principal_component_regression(
+        pcr = principal_component_regression(
             mixtures, y=mix_coeffs,
             x_names=np.round(wavelengths, 2).astype('str'),
             y_names=['Comp_{}'.format(idx)
