@@ -5,10 +5,10 @@
 # pyDataFitting
 Linear and nonlinear fit functions that can be used *e.g.* for curve fitting.
 Is not meant to duplicate methods already implemented *e.g.* in NumPy or SciPy,
-but to provide additional, specialized regression methods or higher computation
-speed. You will need certain functions of my little_helpers repository and
-quite a few other, external packages like Numpy, Pandas, matplotlib,
-scikit-learn, statsmodels, Scipy.
+but to provide additional, specialized regression methods, higher computation
+speed, or help with methods from well-known packages. You will need certain
+functions of my little_helpers repository and quite a few other, external
+packages like Numpy, Pandas, matplotlib, scikit-learn, statsmodels, Scipy.
 
 Install with:
 ```
@@ -48,15 +48,10 @@ very usable).
 
 ## General nonlinear regression (in nonlinear_regression.py)
 * nonlinear_regression: Does nonlinear regressions by minimizing the sum of the
-squared residuals. Basically utilizes differential_evolution, least_squares,
-basinhopping, brute, shgo or dual_annealing from scipy.optimize to estimatze
-the parameters of complex regression functions. The functions must be included
-in calc_functions, but can be added easily there. This is not a particularly
-fast method, so use methods from other packages for simple problems.
-* nonlinear_regression_3D: Does the same like nonlinear_regression, but on 3D
-datasets. Also here, the regression function must be included in
-calc_function_3D. The functionality is included also in nonlinear_regression by
-now, but this function is kept for backwards compatibility for the moment.
+squared residuals. Basically utilizes the minimize method from lmfit to
+estimatze the parameters of complex regression functions. The functions
+calculating the function values must be written externally, but this is pretty
+straight forward. 
 
 ## Principal component regression and partial least squares regression (in multivariate_regression.py)
 * principal_component_regression: A class for a principal component regression
@@ -68,3 +63,11 @@ improving.
 * pls_regression: A class to help with using the partial least squares
 regression class from scikit-learn. It is usable, but could do with some
 redesigning.
+
+## Tools for supporting the use of ols from statsmodels.formula.api (in model_tools.py)
+* Provides simple methods to generate the model string for different simple
+models (linear, two-factor interaction, quadratic, etc.). 
+* Provides a method to easily adapt the included parameters in the model string
+and a method to ensure model hierarchy.
+* Allows the calculation of model values if the model coefficients are
+provided.
