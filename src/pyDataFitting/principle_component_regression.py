@@ -14,7 +14,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
 
-from little_helpers.statsmodel_wrapper import statsmodel_wrapper, ols_wrapper
+from little_helpers.statsmodel_wrapper import ols_wrapper
 from .model_tools import model_tools
 
 
@@ -311,13 +311,14 @@ class principal_component_regression():
         """
         Perform principal component regression for one number of components.
 
-        One PCA object is generated for every number of components.
-        This is necessary in order to be able to use the PCA transform method
-        in self.predict. For example, the predicted sample values ('y') of the
-        training data ('c'), the corresponding predictions ('y') after
-        cross-validation ('cv'), the coefficient of determination ('r2') for
-        'c' and 'cv', and the root mean squared error ('rmse') for 'c' and 'cv'
-        are calculated.
+        The model used for the fit can be a linear or a non-linear model, as
+        supported by statsmodels ols object. One PCA object is generated for
+        every number of components. This is necessary in order to be able to
+        use the PCA transform method in self.predict. For example, the
+        predicted sample values ('y') of the training data ('c'), the
+        corresponding predictions ('y') after cross-validation ('cv'), the
+        coefficient of determination ('r2') for 'c' and 'cv', and the root mean
+        squared error ('rmse') for 'c' and 'cv' are calculated.
 
         Parameters
         ----------
@@ -328,6 +329,10 @@ class principal_component_regression():
             explained variance only ('exp_var'), only based on corellation
             with the data in self.y ('corr_coef'), or are given in a list based
             on the exlained variance order ('list'). Default is 'exp_var'.
+        model : str
+            The model used to fit the data. Can be any value allowed by
+            model_tools from pyDataFitting, such as 'linear', '2fi', '3fi',
+            'quadratic'.
         **kwargs :
             All **kwargs from sklearn.decomposition.PCA are allowed, see the
             documentation of that class for details.
@@ -419,7 +424,7 @@ class principal_component_regression():
             fit_scores = self.pca_scores.loc[
                 :, self.pcr_used_pcs.at[n_components, curr_y]]
 
-            # Build linear model
+            # Build regression model, either linear or non-linear
             param_names = ['PC' + str(nbr) for nbr in fit_scores.columns]
             model_t = model_tools(model, param_names, response_name=curr_y)
             fit_scores.columns = param_names
@@ -497,7 +502,7 @@ class principal_component_regression():
         Predict unknown sample target values.
 
         Currently works correct only for mode=='exp_var'. For
-        mode=='corr_coef', the tranformation has to be implemented independent
+        mode=='corr_coef', the transformation has to be implemented independent
         of the PCA object method.
 
         Parameters
