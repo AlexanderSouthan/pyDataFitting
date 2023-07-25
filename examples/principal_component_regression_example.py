@@ -8,8 +8,7 @@ Created on Mon Feb  7 16:20:57 2022
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pyDataFitting.multivariate_regression import (
-    principal_component_regression)
+from pyDataFitting import principal_component_regression
 from little_helpers.math_functions import gaussian
 
 # The wavelength range of a spectrum
