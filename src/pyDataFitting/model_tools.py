@@ -263,7 +263,7 @@ class model_tools:
             self.param_combinations['mask']==True, self.param_names]
         for curr_combi in combi_matrix.index:
             curr_mask = combi_matrix.loc[curr_combi].astype(bool)
-            front_factors[curr_combi] = np.product(
+            front_factors[curr_combi] = np.prod(
                 coded_values[curr_mask]**combi_matrix.loc[curr_combi,
                                                           curr_mask])
 
