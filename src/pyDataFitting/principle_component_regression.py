@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_predict
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import root_mean_squared_error, r2_score
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
 
@@ -450,15 +450,15 @@ class principal_component_regression():
                 self.y[curr_y], self.pcr_y_cv.loc[
                     idx[curr_y, :], n_components], multioutput='raw_values')
             self.pcr_metrics.at[(curr_y, 'rmse_c'), n_components] = (
-                mean_squared_error(self.y[curr_y],
+                root_mean_squared_error(self.y[curr_y],
                                    self.pcr_y_c.loc[idx[curr_y, :],
                                                     n_components],
-                                   multioutput='raw_values', squared=False))
+                                   multioutput='raw_values'))
             self.pcr_metrics.at[(curr_y, 'rmse_cv'), n_components] = (
-                mean_squared_error(self.y[curr_y],
+                root_mean_squared_error(self.y[curr_y],
                                    self.pcr_y_cv.loc[idx[curr_y, :],
                                                      n_components],
-                                   multioutput='raw_values', squared=False))
+                                   multioutput='raw_values'))
 
     def pcr_sweep(self, sweep_components=20, cv_percentage=20, mode='exp_var',
                   model='linear', **kwargs):
