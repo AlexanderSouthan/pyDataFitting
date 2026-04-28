@@ -12,7 +12,7 @@ from scipy.stats import gaussian_kde
 
 
 def nonlinear_regression(initial_guess, bounds, func, x, y, z=None,
-                         non_fit_par={}, alg='differential_evolution',
+                         alg='differential_evolution',
                          weights=None, **kwargs):
     """
     Do a nonlinear regression on a dataset.
@@ -30,7 +30,10 @@ def nonlinear_regression(initial_guess, bounds, func, x, y, z=None,
         A dictionary with keys that are the names of the parameters passed to
         func. The values are list with two entries, the first being the lower
         limit and the second being the upper limit of the fit parameters. Not
-        all methods use boundaries, and they can also be -inf or inf.
+        all methods use boundaries, and they can also be -inf or inf. If a
+        parameter should not be varied during the fit, the bounds value for
+        this parameter can either be 'fixed' or both bounds are identical. In
+        this case, the intial guess value is used.
     func: a callable function
         The function used to calculate the fit curve values. Must accept
         independent variables as the first arguments and additionally fit
@@ -46,11 +49,6 @@ def nonlinear_regression(initial_guess, bounds, func, x, y, z=None,
         x. The fit is then performed as a fit on the 3D dataset with x and y as
         the independent variables. Default is None, meaning that a 2D fit is
         performed only with x as independent variable.
-    non_fit_par : dict, optional
-        A dictionary containing additional parameters used when calling
-        func that are needed to calculate the dependent variable values. The
-        given values can be understood as parameters that are fixed for the
-        fit. Default is an empty dictionary.
     alg : string, optional
         The algorithm used to minimize the sum of the squared residuals.
         Allowed values are all methods possible for lmfit.minimize.
@@ -70,8 +68,12 @@ def nonlinear_regression(initial_guess, bounds, func, x, y, z=None,
     """
     params = lmfit.Parameters()
     for curr_key, curr_guess in initial_guess.items():
-        params.add(curr_key, curr_guess, min=bounds[curr_key][0],
-                   max=bounds[curr_key][1])
+        if (bounds[curr_key] == 'fixed') or (
+                bounds[curr_key][0] == bounds[curr_key][1]):
+            params.add(curr_key, curr_guess, vary=False)
+        else:
+            params.add(curr_key, curr_guess, min=bounds[curr_key][0],
+                       max=bounds[curr_key][1])
 
     if weights is None:
         weights = np.ones_like(x)
@@ -88,11 +90,11 @@ def nonlinear_regression(initial_guess, bounds, func, x, y, z=None,
 
     result = lmfit.minimize(fit_error, params,
                             args=(func, x, y, weights, 'residuals', 
-                                  z, non_fit_par), method=alg, **kwargs)
+                                  z), method=alg, **kwargs)
     return result
 
 def fit_error(params, func, x, y, weights, mode='sum_of_squares',
-              z=None, non_fit_par={}):
+              z=None):
     """
     The objective function to be minimized with nonlinear_regresssion.
 
@@ -120,11 +122,6 @@ def fit_error(params, func, x, y, weights, mode='sum_of_squares',
         x and y as the independent variables. Default is None,
         meaning that a 2D fit is performed only with x as independent
         variable.
-    non_fit_par : dict, optional
-        A dictionary containing additional parameters used when calling
-        func that are needed to calculate the dependent variable
-        values. The given values can be understood as parameters that are
-        fixed for the fit. Default is an empty dictionary.
 
     Returns
     -------
@@ -138,8 +135,8 @@ def fit_error(params, func, x, y, weights, mode='sum_of_squares',
     else:
         indep = [x, y]
         dep = z
-
-    curr_values = func(*indep, **params, **non_fit_par)
+    
+    curr_values = func(*indep, **params)
 
     modes = ['sum_of_squares', 'residuals']
     if mode == modes[0]:  # sum_of_squares
