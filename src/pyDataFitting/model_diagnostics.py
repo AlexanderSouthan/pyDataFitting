@@ -12,10 +12,7 @@ from scipy.special import erfinv
 
 
 def percentiles(data):
-    percentiles = np.empty_like(data)
-
-    for ii, curr_data in enumerate(data):
-        percentiles[ii] = percentileofscore(data, curr_data, kind='mean')
+    percentiles = percentileofscore(data, data, kind='mean')
 
     return percentiles
 
