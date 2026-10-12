@@ -412,14 +412,14 @@ class principal_component_regression():
             # Select score values to be used for the regression based on the
             # mode given.
             if mode == 'exp_var':
-                self.pcr_used_pcs.at[n_components, curr_y] = np.arange(
-                    1, n_components+1)
+                self.pcr_used_pcs.loc[n_components, curr_y] = list(
+                    range(1, n_components+1))
             elif mode == 'corr_coef':
-                self.pcr_used_pcs.at[n_components, curr_y] = np.flip(
+                self.pcr_used_pcs.at[n_components, curr_y] = (np.flip(
                     np.argsort(self.pcr_corr_coef.loc[:, curr_y].values)[
-                        -n_components:])+1
+                        -n_components:])+1).tolist()
             elif mode == 'list':
-                self.pcr_used_pcs.at[n_components, curr_y] = np.array(pc_list)
+                self.pcr_used_pcs.at[n_components, curr_y] = pc_list
 
             fit_scores = self.pca_scores.loc[
                 :, self.pcr_used_pcs.at[n_components, curr_y]]
@@ -846,11 +846,12 @@ class principal_component_regression():
                              linewidth=1)
                 ax1.plot(curr_y, z_c[1]+z_c[0]*curr_y, c='red', linewidth=1)
                 ax1.plot(curr_y, curr_y, color='green', linewidth=1)
-                plt.title('$R^{2}$ (CV): '+str(
-                    self.pcr_metrics.at[(self.y_names[response_number],
-                                         'r2_cv'), n_components]))
-                plt.xlabel('Measured')
-                plt.ylabel('Predicted')
+                ax1.set_title('Response: ' + self.y_names[response_number] +
+                          ', $R^{2}$ (CV): '+str(
+                              self.pcr_metrics.at[(self.y_names[response_number],
+                                                   'r2_cv'), n_components]))
+                ax1.set_xlabel('Measured')
+                ax1.set_ylabel('Predicted')
             plots.append(fig1)
         if 'r2_vs_comp' in plot_names:
             curr_c_r2 = self.pcr_metrics.loc[(self.y_names[response_number],
@@ -865,8 +866,9 @@ class principal_component_regression():
                 if plot_cv_data:
                     ax2.plot(
                         curr_cv_r2, linestyle='--', marker='o')
-                plt.ylabel('$R^{2}$')
-                plt.xlabel('Number of components')
+                ax2.set_ylabel('$R^{2}$')
+                ax2.set_xlabel('Number of components')
+                ax2.set_title('Response: ' + self.y_names[response_number])
             plots.append(fig2)
         if 'mse_vs_comp' in plot_names:
             curr_c_rmse = self.pcr_metrics.loc[(self.y_names[response_number],
@@ -881,8 +883,9 @@ class principal_component_regression():
                 if plot_cv_data:
                     ax3.plot(
                         curr_cv_rmse, linestyle='--', marker='o')
-                plt.ylabel('RMSE')
-                plt.xlabel('Number of components')
+                ax3.set_ylabel('RMSE')
+                ax3.set_xlabel('Number of components')
+                ax3.set_title('Response: ' + self.y_names[response_number])
             plots.append(fig3)
         if 'expvar_vs_corrcoef' in plot_names:
             curr_expvar = self.pca_explained_variance['each']
@@ -896,9 +899,9 @@ class principal_component_regression():
                     ax4.annotate(txt, (curr_expvar[ii+1], curr_corrcoef[ii+1]))
                 ax4.set_yscale('log')
                 ax4.set_xscale('log')
-                plt.ylabel('Correlation coefficients')
-                plt.xlabel('Explained variance')
-                plt.title(self.y_names[response_number])
+                ax4.set_ylabel('Correlation coefficients')
+                ax4.set_xlabel('Explained variance')
+                ax4.set_title(self.y_names[response_number])
             plots.append(fig4)
         if 'scoreplot_3D' in plot_names:
             pc_numbers = kwargs.get('pc_numbers', [0, 1, 2])
